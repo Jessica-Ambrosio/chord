@@ -1,10 +1,14 @@
-from flask import Flask, request
+from flask import Flask, request, render_template
+import sys
+
+
 node = Flask(__name__)
+node.secret_key = "Distribyed4Lyfe"
 
 
 @node.route("/")
 def home():
-	return "<h1>This will contain the GUI to interact with Chord</h1>"
+	return render_template("index.html")
 
 # Depending on how long the functions become, we could separate this
 # into two files. One containing user functions, and the other one
@@ -14,7 +18,8 @@ def home():
 
 @node.route("/join")
 def join():
-	return "<h1>This will be the join function.</h1>"
+	return "join"
+	
 
 @node.route("/leave")
 def leave():
@@ -24,7 +29,7 @@ def leave():
 def search():
 	return "FILE"
 
-@node.upload("/upload") # I'll figure this out tonight.
+@node.route("/upload") # I'll figure this out tonight.
 def upload():
 	return "FILE UPLOADED"
 
@@ -62,14 +67,23 @@ def genID():
 	print "I will return an ID"
 
 def between(a, b, c):
-	print "the value in between is b"
+	if b > a:
+		if (a < c) and (c < b):
+			return True
+		else:
+			return False
+	else:
+		if (c > a) or (c < b):
+			return True
+		else:
+			return False
 
 # END OF CHORD FUNCTIONS
 
 
 if __name__ == "__main__":
-	app.debug = True
-	app.run(host="0.0.0.0")
+	node.debug = True
+	node.run(host="0.0.0.0")
 
 
 
