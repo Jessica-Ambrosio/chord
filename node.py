@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template
 import sys
-
+import hashlib
+import socket
 
 node = Flask(__name__)
 node.secret_key = "Distribyed4Lyfe"
@@ -14,18 +15,39 @@ def home():
 # into two files. One containing user functions, and the other one
 # with Chord functions only. 
 
+# Do you want to make a Node object? D:! 
+
+# USER VARIABLES
+nodeID = 0 
+# We could have a list of downloaded files on display. 
+
+# CHORD VARIABLES
+idBits = 3   		# Number of bits for ID
+successor = None
+predecessor = None
+
+
+
 # USER FUNCTIONS
 
-@node.route("/join")
+@node.route("/join", methods["POST", "GET"])
 def join():
-	return "join"
+	# Generate ID for the node.
+	# Announce self. 
+	# Broadcast message to the network. 
+		# Need Broadcast address of network.
+	# Set timer and wait for responses.
+		# If we get responses
+			# Store receivers. 
+			# Verify with receiver that our ID has not been taken. 
+
 	
 
-@node.route("/leave")
+@node.route("/leave", methods["POST"])
 def leave():
 	return "<h1>You have successfully exited chord.</h1>"
 
-@node.route("/search") # This will be a GET request. 
+@node.route("/search", methods["POST"]) # This will be a GET request. 
 def search():
 	return "FILE"
 
@@ -64,7 +86,9 @@ def fixFinger():
 	return "finger"
 
 def genID():
-	print "I will return an ID"
+	# Get IP address
+	# Hash it and mod it
+	# return it 
 
 def between(a, b, c):
 	if b > a:
