@@ -30,11 +30,15 @@ predecessor = None
 
 # USER FUNCTIONS
 
-@node.route("/join", methods["POST", "GET"])
-def join():
+@node.route("/")
+def main():
+	render_template("index.html")
+
+#@node.route("/join", methods["POST"])
+#def join():
 	# Generate ID for the node.
-	global nodeID 
-	nodeID = genID()
+	#global nodeID 
+	#nodeID = genID()
 	# Announce self. 
 	# Broadcast message to the network. 
 		# Need Broadcast address of network.
@@ -45,11 +49,11 @@ def join():
 
 	
 
-@node.route("/leave", methods["POST"])
+@node.route("/leave")
 def leave():
 	return "<h1>You have successfully exited chord.</h1>"
 
-@node.route("/search", methods["POST"]) # This will be a GET request. 
+@node.route("/search") # This will be a GET request. 
 def search():
 	return "FILE"
 
@@ -88,10 +92,8 @@ def fixFinger():
 	return "finger"
 
 def genID():
-	# Get IP address
 	hostname = socket.gethostname()
 	IP = socket.gethostbyname(hostname)
-	# Hash it and mod it 
 	ID = hashlib.sha1(IP) % math.pow(2, idBits)
 	return ID
 
