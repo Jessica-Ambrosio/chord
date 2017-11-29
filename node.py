@@ -1,7 +1,9 @@
 from flask import Flask, request, render_template
 import sys, math
 import hashlib
-import socket
+from socket import *
+import ipaddress # Let's hope this is installed in the zoo
+import time
 
 node = Flask(__name__)
 node.secret_key = "Distribyed4Lyfe"
@@ -25,23 +27,30 @@ nodeID = 0
 idBits = 3   		# Number of bits for ID
 successor = None
 predecessor = None
-
-
+nodeSocket = socket.socket(AF_INET, socket.SOCK_STREAM)
+nodePort = 5000
 
 # USER FUNCTIONS
 
 @node.route("/")
 def main():
+	# Initialize the port opening the page.
+	try: 
+		nodeSocket.bind(socket.gethostbyname(hostname), nodePort)
+	except socket.error:
+		return "Error creating socket."
+		sys.exit()
 	render_template("index.html")
 
-#@node.route("/join", methods["POST"])
-#def join():
-	# Generate ID for the node.
-	#global nodeID 
-	#nodeID = genID()
-	# Announce self. 
-	# Broadcast message to the network. 
-		# Need Broadcast address of network.
+@node.route("/join", methods["POST"])
+def join():
+	#Generate ID for the node.
+	global nodeID 
+	nodeID = genID()
+	#Announce self. 
+	data = "EXIST"
+	dest = ('<broadcast>', nodePort)
+	nodeSocket.sendto(data, dest)
 	# Set timer and wait for responses.
 		# If we get responses
 			# Store receivers. 
