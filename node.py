@@ -1,5 +1,5 @@
 from flask import Flask, request, render_template
-import sys
+import sys, math
 import hashlib
 import socket
 
@@ -18,7 +18,7 @@ def home():
 # Do you want to make a Node object? D:! 
 
 # USER VARIABLES
-nodeID = 0 
+nodeID = 0
 # We could have a list of downloaded files on display. 
 
 # CHORD VARIABLES
@@ -33,6 +33,8 @@ predecessor = None
 @node.route("/join", methods["POST", "GET"])
 def join():
 	# Generate ID for the node.
+	global nodeID 
+	nodeID = genID()
 	# Announce self. 
 	# Broadcast message to the network. 
 		# Need Broadcast address of network.
@@ -87,8 +89,11 @@ def fixFinger():
 
 def genID():
 	# Get IP address
-	# Hash it and mod it
-	# return it 
+	hostname = socket.gethostname()
+	IP = socket.gethostbyname(hostname)
+	# Hash it and mod it 
+	ID = hashlib.sha1(IP) % math.pow(2, idBits)
+	return ID
 
 def between(a, b, c):
 	if b > a:
