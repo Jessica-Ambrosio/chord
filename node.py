@@ -1,8 +1,8 @@
 from flask import Flask, request, render_template
 import sys, math
 import hashlib
+import requests
 from socket import *
-import ipaddress # Let's hope this is installed in the zoo
 import time
 
 node = Flask(__name__)
@@ -29,7 +29,7 @@ successor = None
 predecessor = None
 nodeSocket = socket.socket(AF_INET, socket.SOCK_STREAM)
 nodePort = 5000
-
+neighbors = []
 
 # USER FUNCTIONS
 
@@ -43,32 +43,42 @@ def main():
 		sys.exit()
 	render_template("index.html")
 
-@node.route("/join", methods["POST"])
+# TO DO: MAKE /exist POST function to check if a node alreayd exists. 
+
+@node.route("/join")
 def join():
-
-	# Set timer and wait for responses.
-
-		# If we get responses
-			# Store receivers. 
-			# Verify with receiver that our ID has not been taken. 
-
-def announceSelf():
 	#Generate ID for the node.
 	global nodeID 
 	nodeID = genID()
 	#Announce self. 
-	data = "EXIST" + str(nodeID)
+	data = "CONNECT"
 	dest = ('<broadcast>', nodePort)
 	nodeSocket.settimeout(5.0)  	   # Has a timeout of 5 seconds.
 	nodeSocket.sendto(data, dest)
 	try:
-		#Make while loop to 
-		data, address = nodeSocket.recv(512) # Return value is a string
-		# Print information to make sure we're receiving something. 
+		counter = 0
+		idTaken = False
+		(data, address) = nodeSocket.recvfrom(512)  # data -> string
+		# Keep at most 5 nodes available in case the others fail.
+		while ((not is_empty((data,address))) and (counter < 5)):
+			r = requests.post(str(address) + "/exist", data={'id':nodeID})
+			if (not is_empty(r)): 
+				neighbors.append((data,address))
+				if r == "YES": # The node already exists.
+					idTaken = True
+			counter += 1
+			(data, address) = nodeSocket.recvfrom(512)
+		if (idTaken):
+			changeID() 	# This function will create a new ID, and  
+						# will send requests to the saved list of neighbors
+						# to check if the ID has been taken. 
+		else:
+			makeFingers() # Make the finger table! :D 
 	except socket.timeout:
 		print "YOU ARE THE FIRST NODE IN THE CHORD SYSTEM."
 	
-
+# Make function to check if there exists a node with a given 
+# 
 @node.route("/leave")
 def leave():
 	return "<h1>You have successfully exited chord.</h1>"
@@ -115,7 +125,7 @@ def genID():
 	hostname = socket.gethostname()
 	IP = socket.gethostbyname(hostname)
 	ID = hashlib.sha1(IP) % math.pow(2, idBits)
-	return ID
+	return string(ID)
 
 def between(a, b, c):
 	if b > a:
