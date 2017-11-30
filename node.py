@@ -30,6 +30,7 @@ predecessor = None
 nodeSocket = socket.socket(AF_INET, socket.SOCK_STREAM)
 nodePort = 5000
 
+
 # USER FUNCTIONS
 
 @node.route("/")
@@ -44,18 +45,28 @@ def main():
 
 @node.route("/join", methods["POST"])
 def join():
-	#Generate ID for the node.
-	global nodeID 
-	nodeID = genID()
-	#Announce self. 
-	data = "EXIST"
-	dest = ('<broadcast>', nodePort)
-	nodeSocket.sendto(data, dest)
+
 	# Set timer and wait for responses.
+
 		# If we get responses
 			# Store receivers. 
 			# Verify with receiver that our ID has not been taken. 
 
+def announceSelf():
+	#Generate ID for the node.
+	global nodeID 
+	nodeID = genID()
+	#Announce self. 
+	data = "EXIST" + str(nodeID)
+	dest = ('<broadcast>', nodePort)
+	nodeSocket.settimeout(5.0)  	   # Has a timeout of 5 seconds.
+	nodeSocket.sendto(data, dest)
+	try:
+		#Make while loop to 
+		data, address = nodeSocket.recv(512) # Return value is a string
+		# Print information to make sure we're receiving something. 
+	except socket.timeout:
+		print "YOU ARE THE FIRST NODE IN THE CHORD SYSTEM."
 	
 
 @node.route("/leave")
