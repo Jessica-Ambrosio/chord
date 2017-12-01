@@ -1,5 +1,5 @@
-from flask import Flask, request, render_template
-# from flask_socketio import *
+
+from flask import Flask, request, render_template, jsonify
 import sys, math
 import hashlib
 import requests
@@ -7,11 +7,16 @@ import socket
 import time
 import nmap
 import random
+import requests
 
 node = Flask(__name__)
 node.secret_key = "Distribyed4Lyfe"
 # socketio = SocketIO(node)
 
+class Node:
+	def __init__(self, IP, ID):
+		self.IP = IP
+		self.ID = ID
 
 @node.route("/")
 def home():
@@ -29,21 +34,84 @@ nodeID = 0
 idBits = 3   		# Number of bits for ID
 successor = None
 predecessor = None
-neighbors = []
+NEIGHBORS = []
+
+# Do you want to make a Node object? D:!
+
+# USER VARIABLES
+NODE = Node(None, None)
+# We could have a list of downloaded files on display.
+
+# CHORD VARIABLES
+IDBITS = 3   		# Number of bits for ID
+SUCCESSOR = Node(None, None)
+PREDECESSOR = Node(None, None)
+# key: i (for ith finger), value: (start, Node node)
+FINGERS = dict()
+# successor_list = []
 
 # USER FUNCTIONS
+
+# find the successor node of an ID on the Chord ring
+def find_succesor(ID):
+	node = find_predecessor(ID)
+	r = requests.get(node.IP + '/succesor')
+	# LOOP X TIMES??
+	if r.status_code != 200:
+		raise Exception('/succesor to ' + node.IP + ' failed')
+
+	data = r.json()
+	return Node(data["ip"], data["id"])
+
+def find_predecessor(ID):
+	global NODE, SUCCESSOR
+	node = NODE
+	found = False
+	while not found:
+		# find [node]'s successor
+		succ = None
+		if node == NODE:
+			succ = SUCCESSOR
+		else:
+			r = requests.get(node.IP + '/succesor')
+			if r.status_code != 200:
+				raise Exception('/succesor to ' + node.IP + ' failed')
+			data = r.json()
+			succ = Node(data["ip"], data["id"])
+		# check if [node] is [ID]'s predecessor
+		if between(node.ID + 1, succ.ID, ID):
+			found = True
+		else:
+			if node == NODE:
+				node = find_closest_preceding_finger(ID)
+			else:
+				r = requests.post(node.IP + '/closest_preceding_finger', data={'id': ID})
+				if r.status_code != 200:
+					raise Exception('/closest_preceding_finger to ' + node.IP + ' failed')
+				data = r.json()
+				node = Node(data["ip"], data["id"])
+	return node
+
+def find_closest_preceding_finger(ID):
+	global NODE, FINGERS, IDBITS
+	# loops from IDBITS to 1
+	for i in range(IDBITS, 0, -1):
+		ith_finger = FINGERS[i][1]
+		if between(NODE.ID + 1, ID - 1, ith_finger.ID):
+			return ith_finger
+	return NODE
 
 @node.route("/")
 def main():
 	render_template("index.html")
 
-# TO DO: MAKE /exist POST function to check if a node already exists.
+# TO DO: MAKE /exist POST function to check if a node already exists.NEIGHBORS
 
 @node.route("/join", methods=["POST", "GET"])
 def join():
 	# Generate ID for the node.
-	global nodeID
-	nodeID = genID(False)
+	global NODE
+	NODE.ID = genID(False)
 	# Scan the network to look for other active Chord nodes.
 	nm = nmap.PortScanner()
  	address = socket.gethostname() + "/24"   	# We are assuming the protocol used is IPv4
@@ -54,13 +122,13 @@ def join():
 		if (counter > 4):
 			break
 		if nm[host]['tcp'][5000]['state'] == "open":
-			neighbors.append(host)
+			NEIGHBORS.append(host)
 			counter += 1
-	if len(neighbors) > 0:
+	if len(NEIGHBORS) > 0:
 		idTaken = False
-		print "This is our list of neighbors"
-		print neighbors
-		for neighbor in neighbors:
+		print "This is our list of NEIGHBORS"
+		print NEIGHBORS
+		for neighbor in NEIGHBORS:
 			try:
 				r = ""
 				r = requests.post("http://" + neighbor + ":5000/exist", data={'id':nodeID}, timeout=5)
@@ -90,14 +158,13 @@ def exist():
 	# Do something to check if the node ID is taken or not.
 	return "NO"
 
-@node.route("/leave")
+@node.route("/leave", methods=["POST"])
 def leave():
 	# Let the nodes on your table know that you are leaving
 	# through a POST request.
 	return "<h1>You have successfully exited chord.</h1>"
 
-
-@node.route("/search")
+@node.route("/search", methods=["POST"]) # This will be a GET request.
 def search():
 	return "FILE"
 
@@ -110,18 +177,31 @@ def upload():
 
 # CHORD FUNCTIONS
 
-@node.route("/findSucc")
-def findSucc():
-	return "successor";
+@node.route("/succesor", methods=["GET"])
+def find_succesor_api():
+	global SUCCESSOR
+	resp = jsonify({
+		"ip": SUCCESSOR.IP,
+		"id": SUCCESSOR.ID
+	})
+	resp.status_code = 200
+	return resp
 
-@node.route("/findPred")
+@node.route("/predecessor")
 def findPred():
-	return "predecessor"
+	return predecessor
 
 # Finds closest preceding finger.
-@node.route("/finger")
-def finger():
-	return "finger"
+@node.route("/closest_preceding_finger", methods=["POST"])
+def find_closest_preceding_finger_api():
+	data = request.get_json()
+	closest_preceding_finger = find_closest_preceding_finger(data["id"])
+	resp = jsonify({
+		"ip": closest_preceding_finger.IP,
+		"id": closest_preceding_finger.ID,
+	})
+	resp.status_code = 200
+	return resp
 
 @node.route("/stabilize")
 def stabilize():
@@ -131,7 +211,7 @@ def stabilize():
 def notify():
 	return "notify"
 
-@node.route("/fixFinger")
+@node.route("/fix_finger")
 def fixFinger():
 	return "finger"
 
@@ -150,29 +230,20 @@ def genID(addRandom):
     ID = decimal % (2 ** 3)
     return str(ID)
 
-
-# This function will create a new ID, and
-# will send requests to the saved list of neighbors
-# to check if the ID has been taken. This will be repeated
-# until we determine a valid ID.
-def changeID():
-	print "I will do something"
-
-
+# checks if ID c is (inclusive) between a & b in the Chord ring
 def between(a, b, c):
 	if b > a:
-		if (a < c) and (c < b):
+		if a <= c and c <= b:
 			return True
 		else:
 			return False
 	else:
-		if (c > a) or (c < b):
+		if c >= a or c <= b:
 			return True
 		else:
 			return False
 
 # END OF CHORD FUNCTIONS
-
 
 if __name__ == "__main__":
 	node.debug = True
