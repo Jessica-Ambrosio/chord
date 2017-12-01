@@ -145,7 +145,10 @@ def fixFinger():
 def genID():
 	hostname = socket.gethostname()
 	IP = socket.gethostbyname(hostname)
-	ID = hashlib.sha1(IP) % math.pow(2, idBits)
+	hashIP = hashlib.sha1(IP)
+	ID = int(hashIP.hexdigest(), 16) % math.pow(2, idBits)
+	print 'The id is' ,
+	print ID
 	return string(ID)
 
 
