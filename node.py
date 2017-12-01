@@ -1,13 +1,14 @@
 from flask import Flask, request, render_template
-from flask_socketio import SocketIO
+from flask_socketio import *
 import sys, math
 import hashlib
 import requests
-from socket import *
+import socket
 import time
 
 node = Flask(__name__)
 node.secret_key = "Distribyed4Lyfe"
+socketio = SocketIO(node)
 
 
 @node.route("/")
@@ -26,8 +27,8 @@ nodeID = 0
 idBits = 3   		# Number of bits for ID
 successor = None
 predecessor = None
-nodeSocket = socket.socket(AF_INET, socket.SOCK_STREAM)
-nodePort = 5000
+nodeSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+nodePort = 5001
 neighbors = []
 
 # USER FUNCTIONS
@@ -44,13 +45,13 @@ def main():
 
 # TO DO: MAKE /exist POST function to check if a node already exists. 
 
-@node.route("/join")
+@node.route("/join", methods=["POST", "GET"])
 def join():
 	#Generate ID for the node.
 	global nodeID 
 	nodeID = genID()
 	#Announce self. 
-	data = "CONNECT"
+	data = "CHECKID"
 	dest = ('<broadcast>', nodePort)
 	nodeSocket.settimeout(5.0)  	   # Has a timeout of 5 seconds.
 	nodeSocket.sendto(data, dest)
@@ -80,11 +81,19 @@ def join():
 
 # Returns "YES" if the ID has already been taken
 # and "NO" otherwise. 
-@node.route("/exist", methods["POST"])
+@node.route("/exist", methods=["POST"])
 def exist():
 	recID = request.form['id']
 	# Do something to check if the node ID is taken or not.
 	return "NO"  
+
+@socketio.on("message")
+def test_message(message):
+	# This should parse the message,
+	# Check what kind of message it is,
+	# and return its IP address or a "YES" "NO"
+	# answer if necessary.
+	send("NO")
 
 
 @node.route("/leave")
@@ -94,7 +103,7 @@ def leave():
 	return "<h1>You have successfully exited chord.</h1>"
 
 
-@node.route("/search") # This will be a GET request. 
+@node.route("/search") 
 def search():
 	return "FILE"
 
@@ -164,7 +173,7 @@ def between(a, b, c):
 
 if __name__ == "__main__":
 	node.debug = True
-	node.run(host="0.0.0.0")
+	socketio.run(node) # Defaults to listening on localhost:5000
 
 
 
