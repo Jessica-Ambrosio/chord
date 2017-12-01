@@ -17,11 +17,11 @@ def home():
 
 # Depending on how long the functions become, we could separate this
 # into two files. One containing user functions, and the other one
-# with Chord functions only. 
+# with Chord functions only.
 
 # USER VARIABLES
 nodeID = 0
-# We could have a list of downloaded files on display. 
+# We could have a list of downloaded files on display.
 
 # CHORD VARIABLES
 idBits = 3   		# Number of bits for ID
@@ -36,56 +36,59 @@ neighbors = []
 @node.route("/")
 def main():
 	# Initialize the port opening the page.
-	try: 
+	try:
 		nodeSocket.bind(socket.gethostbyname(hostname), nodePort)
 	except socket.error:
 		return "Error creating socket."
 		sys.exit()
 	render_template("index.html")
 
-# TO DO: MAKE /exist POST function to check if a node already exists. 
+# TO DO: MAKE /exist POST function to check if a node already exists.
 
 @node.route("/join", methods=["POST", "GET"])
 def join():
 	#Generate ID for the node.
-	global nodeID 
+	global nodeID
 	nodeID = genID()
-	#Announce self. 
+	#Announce self.
 	data = "CHECKID"
-	dest = ('<broadcast>', nodePort)
+	dest = ('<broadcast>', 5000)
 	nodeSocket.settimeout(5.0)  	   # Has a timeout of 5 seconds.
 	nodeSocket.sendto(data, dest)
 	try:
 		counter = 0
 		idTaken = False
 		(data, address) = nodeSocket.recvfrom(512)  # data -> string
-		# Keep at most 5 nodes available in case of disconnects. 
+		print "we are outside the while loop"
+		# Keep at most 5 nodes available in case of disconnects.
 		while ((not is_empty((data,address))) and (counter < 5)):
-			# The requests can have timeouts. This will help us determine if the 
-			# other node is alive or not. 
+			# The requests can have timeouts. This will help us determine if the
+			# other node is alive or not.
+			print "we got inside the while loop"
 			r = requests.post(str(address) + "/exist", data={'id':nodeID}, timeout=5)
-			if (not is_empty(r)): 
+			if (not is_empty(r)):
+				print "the request is not empty"
 				neighbors.append((data,address))
-				print r  	   # For debugging purposes. 
+				print r  	   # For debugging purposes.
 				if r == "YES": # The node already exists.
 					idTaken = True
 			counter += 1
 			(data, address) = nodeSocket.recvfrom(512)
 		if (idTaken):
-			changeID() 	 
+			changeID()
 		else:
-			makeFingers() # Make the finger table! :D 
+			makeFingers() # Make the finger table! :D
 	except socket.timeout:
 		print "YOU ARE THE FIRST NODE IN THE CHORD SYSTEM."
-	
+
 
 # Returns "YES" if the ID has already been taken
-# and "NO" otherwise. 
+# and "NO" otherwise.
 @node.route("/exist", methods=["POST"])
 def exist():
 	recID = request.form['id']
 	# Do something to check if the node ID is taken or not.
-	return "NO"  
+	return "NO"
 
 @socketio.on("message")
 def test_message(message):
@@ -93,18 +96,18 @@ def test_message(message):
 	# Check what kind of message it is,
 	# and return its IP address or a "YES" "NO"
 	# answer if necessary.
-	send("NO")
-	render_template("response.html")
+	return message
+	# render_template("response.html")
 
 
 @node.route("/leave")
 def leave():
 	# Let the nodes on your table know that you are leaving
-	# through a POST request. 
+	# through a POST request.
 	return "<h1>You have successfully exited chord.</h1>"
 
 
-@node.route("/search") 
+@node.route("/search")
 def search():
 	return "FILE"
 
@@ -125,7 +128,7 @@ def findSucc():
 def findPred():
 	return "predecessor"
 
-# Finds closest preceding finger. 
+# Finds closest preceding finger.
 @node.route("/finger")
 def finger():
 	return "finger"
@@ -142,20 +145,22 @@ def notify():
 def fixFinger():
 	return "finger"
 
+# Fix this thing to ensure that it generates different IDs.
+# For now, it's returning 0.0
 def genID():
 	hostname = socket.gethostname()
 	IP = socket.gethostbyname(hostname)
 	hashIP = hashlib.sha1(IP)
 	ID = int(hashIP.hexdigest(), 16) % math.pow(2, idBits)
 	print 'The id is' ,
-	print ID
-	return string(ID)
+	print str(ID)
+	return str(ID)
 
 
-# This function will create a new ID, and  
+# This function will create a new ID, and
 # will send requests to the saved list of neighbors
 # to check if the ID has been taken. This will be repeated
-# until we determine a valid ID. 
+# until we determine a valid ID.
 def changeID():
 	print "I will do something"
 
@@ -178,7 +183,3 @@ def between(a, b, c):
 if __name__ == "__main__":
 	node.debug = True
 	socketio.run(node) # Defaults to listening on localhost:5000
-
-
-
-
