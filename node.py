@@ -8,17 +8,19 @@ import time
 import nmap
 import random
 import requests
+import csv
 
-node = Flask(__name__)
-node.secret_key = "Distribyed4Lyfe"
-# socketio = SocketIO(node)
+app = Flask(__name__)
+app.secret_key = "Distribyed4Lyfe"
 
+# [IP]: string
+# [ID]: integer
 class Node:
 	def __init__(self, IP, ID):
 		self.IP = IP
 		self.ID = ID
 
-@node.route("/")
+@app.route("/")
 def home():
 	return render_template("index.html")
 
@@ -53,15 +55,23 @@ FINGERS = dict()
 # USER FUNCTIONS
 
 # find the successor node of an ID on the Chord ring
-def find_succesor(ID):
+def find_successor(ID):
+	# print '(find_successor): finding successor of ' + str(ID)
 	node = find_predecessor(ID)
-	r = requests.get(node.IP + '/succesor')
-	# LOOP X TIMES??
-	if r.status_code != 200:
-		raise Exception('/succesor to ' + node.IP + ' failed')
+	# print '(find_successor): predecessor of ' + str(ID) + ' is ' + str(node.ID)
 
-	data = r.json()
-	return Node(data["ip"], data["id"])
+	succ = None
+	if node.IP == NODE.IP:
+		succ = SUCCESSOR
+	else:
+		r = requests.get('http://' + node.IP + ':5000/successor')
+		# LOOP X TIMES??
+		if r.status_code != 200:
+			raise Exception('/succesor to ' + node.IP + ' failed')
+
+		data = r.json()
+		succ = Node(data["ip"], int(data["id"]))
+	return succ
 
 def find_predecessor(ID):
 	global NODE, SUCCESSOR
@@ -73,23 +83,25 @@ def find_predecessor(ID):
 		if node == NODE:
 			succ = SUCCESSOR
 		else:
-			r = requests.get(node.IP + '/succesor')
+			r = requests.get('http://' + node.IP + ':5000/successor')
 			if r.status_code != 200:
 				raise Exception('/succesor to ' + node.IP + ' failed')
 			data = r.json()
-			succ = Node(data["ip"], data["id"])
+			succ = Node(data["ip"], int(data["id"]))
 		# check if [node] is [ID]'s predecessor
+		# print '(find_predecessor): successor of node ' + str(node.ID) + ' is ' + str(succ.ID)
 		if between(node.ID + 1, succ.ID, ID):
+			# print str(ID) + ' is between ' + str(node.ID + 1) + ' and ' + str(succ.ID)
 			found = True
 		else:
 			if node == NODE:
 				node = find_closest_preceding_finger(ID)
 			else:
-				r = requests.post(node.IP + '/closest_preceding_finger', data={'id': ID})
+				r = requests.post('http://' + node.IP + ':5000/closest_preceding_finger', json={'id': ID})
 				if r.status_code != 200:
 					raise Exception('/closest_preceding_finger to ' + node.IP + ' failed')
 				data = r.json()
-				node = Node(data["ip"], data["id"])
+				node = Node(data["ip"], int(data["id"]))
 	return node
 
 def find_closest_preceding_finger(ID):
@@ -164,11 +176,11 @@ def leave():
 	# through a POST request.
 	return "<h1>You have successfully exited chord.</h1>"
 
-@node.route("/search", methods=["POST"]) # This will be a GET request.
+@app.route("/search", methods=["POST"]) # This will be a GET request.
 def search():
 	return "FILE"
 
-@node.route("/upload") # I'll figure this out tonight.
+@app.route("/upload") # I'll figure this out tonight.
 def upload():
 	return "FILE UPLOADED"
 
@@ -177,7 +189,7 @@ def upload():
 
 # CHORD FUNCTIONS
 
-@node.route("/succesor", methods=["GET"])
+@app.route("/successor", methods=["GET"])
 def find_succesor_api():
 	global SUCCESSOR
 	resp = jsonify({
@@ -187,12 +199,12 @@ def find_succesor_api():
 	resp.status_code = 200
 	return resp
 
-@node.route("/predecessor")
+@app.route("/predecessor")
 def findPred():
 	return predecessor
 
 # Finds closest preceding finger.
-@node.route("/closest_preceding_finger", methods=["POST"])
+@app.route("/closest_preceding_finger", methods=["POST"])
 def find_closest_preceding_finger_api():
 	data = request.get_json()
 	closest_preceding_finger = find_closest_preceding_finger(data["id"])
@@ -203,15 +215,15 @@ def find_closest_preceding_finger_api():
 	resp.status_code = 200
 	return resp
 
-@node.route("/stabilize")
+@app.route("/stabilize")
 def stabilize():
 	return "peace"
 
-@node.route("/notify")
+@app.route("/notify")
 def notify():
 	return "notify"
 
-@node.route("/fix_finger")
+@app.route("/fix_finger")
 def fixFinger():
 	return "finger"
 
@@ -233,19 +245,37 @@ def genID(addRandom):
 # checks if ID c is (inclusive) between a & b in the Chord ring
 def between(a, b, c):
 	if b > a:
-		if a <= c and c <= b:
-			return True
-		else:
-			return False
+		return a <= c and c <= b
+	elif a > b:
+		return c >= a or c <= b
 	else:
-		if c >= a or c <= b:
-			return True
-		else:
-			return False
+		return a == c
 
 # END OF CHORD FUNCTIONS
 
 if __name__ == "__main__":
-	node.debug = True
-	node.run(host='0.0.0.0', port=5000)
-	# socketio.run(node) # Defaults to listening on localhost:5000
+	if len(sys.argv) > 1:
+		if sys.argv[1] == 'hardcode':
+			with open('state' + sys.argv[2] + '.csv', 'rb') as f:
+				reader = csv.reader(f)
+				arg_list = list(reader)
+				for idx, arg in enumerate(arg_list):
+					# NOTE: IP comes before ID in Node initialization
+					if len(arg) == 3:
+						start, ID, IP = arg
+						FINGERS[idx + 1] = (int(start), Node(IP.strip(), int(ID)))
+					elif len(arg) == 2:
+						ID, IP = arg
+						NODE = Node(IP.strip(), int(ID))
+				SUCCESSOR = (FINGERS[1])[1]
+	# print FINGERS
+	# print SUCCESSOR.ID
+	# print NODE.ID
+
+	if NODE.ID == 3:
+		for i in range(0, 8):
+			node = find_successor(i)
+			print 'Successor of ' + str(i) + ' is ' + str(node.ID)
+
+	app.debug = True
+	app.run(host="0.0.0.0", port=5000)
