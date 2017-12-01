@@ -1,14 +1,15 @@
 from flask import Flask, request, render_template
-from flask_socketio import *
+# from flask_socketio import *
 import sys, math
 import hashlib
 import requests
 import socket
 import time
+import nmap
 
 node = Flask(__name__)
 node.secret_key = "Distribyed4Lyfe"
-socketio = SocketIO(node)
+# socketio = SocketIO(node)
 
 
 @node.route("/")
@@ -27,59 +28,57 @@ nodeID = 0
 idBits = 3   		# Number of bits for ID
 successor = None
 predecessor = None
-nodeSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-nodePort = 5001
 neighbors = []
 
 # USER FUNCTIONS
 
 @node.route("/")
 def main():
-	# Initialize the port opening the page.
-	try:
-		nodeSocket.bind(socket.gethostbyname(hostname), nodePort)
-	except socket.error:
-		return "Error creating socket."
-		sys.exit()
 	render_template("index.html")
 
 # TO DO: MAKE /exist POST function to check if a node already exists.
 
 @node.route("/join", methods=["POST", "GET"])
 def join():
-	#Generate ID for the node.
+	# Generate ID for the node.
 	global nodeID
 	nodeID = genID()
-	#Announce self.
-	data = "CHECKID"
-	dest = ('<broadcast>', 5000)
-	nodeSocket.settimeout(5.0)  	   # Has a timeout of 5 seconds.
-	nodeSocket.sendto(data, dest)
-	try:
-		counter = 0
-		idTaken = False
-		(data, address) = nodeSocket.recvfrom(512)  # data -> string
-		print "we are outside the while loop"
-		# Keep at most 5 nodes available in case of disconnects.
-		while ((not is_empty((data,address))) and (counter < 5)):
-			# The requests can have timeouts. This will help us determine if the
-			# other node is alive or not.
-			print "we got inside the while loop"
-			r = requests.post(str(address) + "/exist", data={'id':nodeID}, timeout=5)
-			if (not is_empty(r)):
-				print "the request is not empty"
-				neighbors.append((data,address))
-				print r  	   # For debugging purposes.
-				if r == "YES": # The node already exists.
-					idTaken = True
+	# Scan the network to look for other active Chord nodes.
+	nm = nmap.PortScanner()
+ 	address = socket.gethostname() + "/24"   	# We are assuming the protocol used is IPv4
+	nm.scan(hosts=address, arguments="-p5000")	# All the chord instances will run on port 5000
+	counter = 0
+	for host in nm.all_hosts():
+		# Do not add more than 5 nodes. We do not need to talk to all the nodes active.
+		if (counter > 4):
+			break
+		if nm[host]['tcp'][5000]['state'] == "open":
+			neighbors.append(host)
 			counter += 1
-			(data, address) = nodeSocket.recvfrom(512)
+	if len(neighbors) > 0:
+		idTaken = False
+		print "This is our list of neighbors"
+		print neighbors
+		for neighbor in neighbors:
+			try:
+				r = ""
+				r = requests.post("http://" + neighbor + ":5000/exist", data={'id':nodeID}, timeout=5)
+				if (not (r == "")):
+					print "the request is not empty"
+					print r  	   # For debugging purposes.
+					if r == "YES": # The node already exists.
+						idTaken = True
+						break;
+			except requests.exceptions.RequestException as e:
+				print e
 		if (idTaken):
-			changeID()
+			# changeID()
+			return "Generate a new ID"
 		else:
-			makeFingers() # Make the finger table! :D
-	except socket.timeout:
-		print "YOU ARE THE FIRST NODE IN THE CHORD SYSTEM."
+			# makeFingers() # Make the finger table! :D
+			return "Welcome to CHORD"
+	else:
+		return "<h1>You are the only chord node in the network</h1>"
 
 
 # Returns "YES" if the ID has already been taken
@@ -89,16 +88,6 @@ def exist():
 	recID = request.form['id']
 	# Do something to check if the node ID is taken or not.
 	return "NO"
-
-@socketio.on("message")
-def test_message(message):
-	# This should parse the message,
-	# Check what kind of message it is,
-	# and return its IP address or a "YES" "NO"
-	# answer if necessary.
-	return message
-	# render_template("response.html")
-
 
 @node.route("/leave")
 def leave():
@@ -182,4 +171,5 @@ def between(a, b, c):
 
 if __name__ == "__main__":
 	node.debug = True
-	socketio.run(node) # Defaults to listening on localhost:5000
+	node.run(host='0.0.0.0', port=5000)
+	# socketio.run(node) # Defaults to listening on localhost:5000
