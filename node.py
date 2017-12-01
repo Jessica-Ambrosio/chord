@@ -1,5 +1,6 @@
 
 from flask import Flask, request, render_template, jsonify
+from werkzeug.utils import secure_filename
 import sys, math
 import hashlib
 import requests
@@ -10,8 +11,12 @@ import random
 import requests
 import csv
 
+UPLOAD_FOLDER = "../static/uploads"
+ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
+
 app = Flask(__name__)
 app.secret_key = "Distribyed4Lyfe"
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # [IP]: string
 # [ID]: integer
@@ -130,7 +135,7 @@ def join():
 				r = requests.post("http://" + neighbor + ":5000/exist", data={'id':NODE.ID}, timeout=5)
 				if (not (r == "")):
 					print "the request is not empty"
-					print r.text 	   # For debugging purposes.
+					# print r.text 	   # For debugging purposes.
 					if r.text == "YES": # The node already exists.
 						idTaken = True
 						break;
@@ -152,12 +157,9 @@ def join():
 # and "NO" otherwise.
 @app.route("/exist", methods=["POST"])
 def exist():
+	# Check if the request is correctly made. 
+	# and send an error otherwise. 
 	recID = request.form['id']
-	# Do something to check if the node ID is taken or not.
-	# resp = jsonify({
-	# 	"YES": "YES";
-	# 	})
-	print "ABOUT TO RETURN YES"
 	return "YES"
 
 @app.route("/leave", methods=["POST"])
@@ -166,13 +168,29 @@ def leave():
 	# through a POST request.
 	return "<h1>You have successfully exited chord.</h1>"
 
+# Function to verify that the file looked up/ downloaded 
+# has one of the allowed extensions. 
+def allowed_file(filename):
+	return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXTENSIONS
+
 @app.route("/search", methods=["POST"]) # This will be a GET request.
 def search():
 	return "FILE"
 
-@app.route("/upload") # I'll figure this out tonight.
+@app.route("/upload", methods=["POST"]) 
 def upload():
-	return "FILE UPLOADED"
+	successFiles = []
+	files = flask.request.files.getlist["uploadButton"]
+	if not files:
+		return "<h1>NO FILE SELECTED</h1>"
+	else:
+		for file in files:
+			if allowed_file(file.filename):
+				filename = secure_filename(file.filename)
+				file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+				successFiles.append(file.filename)
+		render_template("uploadFiles.html", files=successFiles)
+
 
 # END OF USER FUNCTIONS
 
