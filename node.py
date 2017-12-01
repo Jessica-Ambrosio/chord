@@ -243,7 +243,6 @@ def upload():
 # CHORD FUNCTIONS
 
 @app.route("/successor", methods=["GET"])
->>>>>>> Add stabilization protocol, fix/add util functions for Chord ring arithmetic
 def find_succesor_api():
 	global SUCCESSOR
 	resp = jsonify({
@@ -253,7 +252,7 @@ def find_succesor_api():
 	resp.status_code = 200
 	return resp
 
-@node.route("/predecessor")
+@app.route("/predecessor")
 def findPred():
 	resp = jsonify({
 		"ip": PREDECESSOR.IP,
@@ -263,7 +262,7 @@ def findPred():
 	return resp
 
 # Finds closest preceding finger.
-@node.route("/closest_preceding_finger", methods=["POST"])
+@app.route("/closest_preceding_finger", methods=["POST"])
 def find_closest_preceding_finger_api():
 	data = request.get_json()
 	closest_preceding_finger = find_closest_preceding_finger(data["id"])
