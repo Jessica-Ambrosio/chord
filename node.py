@@ -6,6 +6,7 @@ import requests
 import socket
 import time
 import nmap
+import random
 
 node = Flask(__name__)
 node.secret_key = "Distribyed4Lyfe"
@@ -42,7 +43,7 @@ def main():
 def join():
 	# Generate ID for the node.
 	global nodeID
-	nodeID = genID()
+	nodeID = genID(False)
 	# Scan the network to look for other active Chord nodes.
 	nm = nmap.PortScanner()
  	address = socket.gethostname() + "/24"   	# We are assuming the protocol used is IPv4
@@ -136,14 +137,18 @@ def fixFinger():
 
 # Fix this thing to ensure that it generates different IDs.
 # For now, it's returning 0.0
-def genID():
-	hostname = socket.gethostname()
-	IP = socket.gethostbyname(hostname)
-	hashIP = hashlib.sha1(IP)
-	ID = int(hashIP.hexdigest(), 16) % math.pow(2, idBits)
-	print 'The id is' ,
-	print str(ID)
-	return str(ID)
+def genID(addRandom):
+    hostname = socket.gethostname()
+    IP = socket.gethostbyname(hostname)
+    hashIP = hashlib.sha1(IP)
+    hexString = str(int(hashIP.hexdigest(), 16))
+    decimal = 0
+    for index,char in enumerate(hexString):
+        decimal += int (char) * 16 ** index
+    if (addRandom):
+        decimal += random.randint(1, (2**idBits))
+    ID = decimal % (2 ** 3)
+    return str(ID)
 
 
 # This function will create a new ID, and
