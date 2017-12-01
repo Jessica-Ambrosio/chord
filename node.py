@@ -1,7 +1,7 @@
 
 from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
-import sys, math
+import sys, math, os
 import hashlib
 import requests
 import socket
@@ -11,11 +11,12 @@ import random
 import requests
 import csv
 
-UPLOAD_FOLDER = "../static/uploads"
+UPLOAD_FOLDER = "static/uploads"
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
 
 app = Flask(__name__)
 app.secret_key = "Distribyed4Lyfe"
+app.config['UPLOADED_FILES_DEST'] = UPLOAD_FOLDER
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # [IP]: string
@@ -180,17 +181,17 @@ def search():
 @app.route("/upload", methods=["POST"]) 
 def upload():
 	successFiles = []
-	files = flask.request.files.getlist["uploadButton"]
+	files = request.files.getlist("file[]")
 	if not files:
 		return "<h1>NO FILE SELECTED</h1>"
 	else:
 		for file in files:
-			if allowed_file(file.filename):
+			if  file and allowed_file(file.filename):
 				filename = secure_filename(file.filename)
 				file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+				#file.save(filename)
 				successFiles.append(file.filename)
-		render_template("uploadFiles.html", files=successFiles)
-
+		return render_template("uploaded.html", successFiles=successFiles)
 
 # END OF USER FUNCTIONS
 

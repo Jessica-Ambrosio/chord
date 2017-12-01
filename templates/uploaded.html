@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Main -->
+	<div id="main">
+		<div class="inner">
+			<h3>Successfully uploaded the following file(s):</h3>
+				<ul>
+					{% for success in successFiles %}
+						<li>{{ success }}</li>
+					{% endfor %}
+				</ul>
+		</div>
+	</div>
+<!-- End of Main -->
+
+{% endblock %}

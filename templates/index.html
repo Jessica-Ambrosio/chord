@@ -10,21 +10,22 @@
 		</header>
 		<section>
 			<p><center>Main Buttons to Use Chord<center></p>
-				<form action="/join" method="post">
+				<form action="/join" method="POST">
 					<input class="button" type="submit" name="joinButton" value="Join">
 				</form>
-				<form action="/leave" method="post">
+				<form action="/leave" method="POST">
 					<input class="button" type="submit" name="leaveButton" value="Leave">
 				</form>
-				<form action="/search" method="post">
+				<form action="/search" method="POST">
 					<a href="#" class="button">Search</a>
 				</form>
-				<form action="/upload" method="post">
-					<label class="button special icon fa-upload">
-						Upload File <input type="file" style="display:none;" name="uploadButton">
+				<form action="/upload" method="POST" enctype="multipart/form-data">
+					<label>
+						Choose File(s) to Upload <input type="file" name="file[]" multiple>
 					</label>
+					<input class="button special icon fa-upload" type="submit" value="Upload">
 				</form>
-				<form action="/file" method="post">
+				<form action="/file" method="POST">
 					<p> Type the name of the file that you want to download.
 					<input type="text" name="file"> <br>
 					<input class="button special icon fa-download" type="submit" name="downButton" value="Download File">
