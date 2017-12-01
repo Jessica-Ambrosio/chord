@@ -16,7 +16,6 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
 
 app = Flask(__name__)
 app.secret_key = "Distribyed4Lyfe"
-app.config['UPLOADED_FILES_DEST'] = UPLOAD_FOLDER
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # [IP]: string
@@ -182,16 +181,14 @@ def search():
 def upload():
 	successFiles = []
 	files = request.files.getlist("file[]")
-	if not files:
-		return "<h1>NO FILE SELECTED</h1>"
-	else:
-		for file in files:
-			if  file and allowed_file(file.filename):
-				filename = secure_filename(file.filename)
-				file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-				#file.save(filename)
-				successFiles.append(file.filename)
-		return render_template("uploaded.html", successFiles=successFiles)
+	for file in files:
+		if  file and allowed_file(file.filename):
+			filename = secure_filename(file.filename)
+			file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+			successFiles.append(file.filename)
+	if (not successFiles):
+		return render_template("uploaded.html", successFiles=None)
+	return render_template("uploaded.html", successFiles=successFiles)
 
 # END OF USER FUNCTIONS
 
