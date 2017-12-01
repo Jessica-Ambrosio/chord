@@ -24,25 +24,10 @@ class Node:
 def home():
 	return render_template("index.html")
 
-# Depending on how long the functions become, we could separate this
-# into two files. One containing user functions, and the other one
-# with Chord functions only.
-
 # USER VARIABLES
-nodeID = 0
-# We could have a list of downloaded files on display.
-
-# CHORD VARIABLES
-idBits = 3   		# Number of bits for ID
-successor = None
-predecessor = None
 NEIGHBORS = []
-
-# Do you want to make a Node object? D:!
-
-# USER VARIABLES
 NODE = Node(None, None)
-# We could have a list of downloaded files on display.
+
 
 # CHORD VARIABLES
 IDBITS = 3   		# Number of bits for ID
@@ -52,9 +37,8 @@ PREDECESSOR = Node(None, None)
 FINGERS = dict()
 # successor_list = []
 
-# USER FUNCTIONS
 
-# find the successor node of an ID on the Chord ring
+# Find the successor node of an ID on the Chord ring
 def find_successor(ID):
 	# print '(find_successor): finding successor of ' + str(ID)
 	node = find_predecessor(ID)
@@ -138,25 +122,27 @@ def join():
 			counter += 1
 	if len(NEIGHBORS) > 0:
 		idTaken = False
-		print "This is our list of NEIGHBORS"
-		print NEIGHBORS
+		# print "This is our list of NEIGHBORS"
+		# print NEIGHBORS
 		for neighbor in NEIGHBORS:
 			try:
 				r = ""
-				r = requests.post("http://" + neighbor + ":5000/exist", data={'id':nodeID}, timeout=5)
+				r = requests.post("http://" + neighbor + ":5000/exist", data={'id':NODE.ID}, timeout=5)
 				if (not (r == "")):
 					print "the request is not empty"
-					print r  	   # For debugging purposes.
-					if r == "YES": # The node already exists.
+					print r.text 	   # For debugging purposes.
+					if r.text == "YES": # The node already exists.
 						idTaken = True
 						break;
 			except requests.exceptions.RequestException as e:
 				print e
 		if (idTaken):
 			# changeID()
+			print "THE ID IS TAKEN"
 			return "Generate a new ID"
 		else:
 			# makeFingers() # Make the finger table! :D
+			print "WELCOME TO CHORD"
 			return "Welcome to CHORD"
 	else:
 		return "<h1>You are the only chord node in the network</h1>"
@@ -168,7 +154,11 @@ def join():
 def exist():
 	recID = request.form['id']
 	# Do something to check if the node ID is taken or not.
-	return "NO"
+	# resp = jsonify({
+	# 	"YES": "YES";
+	# 	})
+	print "ABOUT TO RETURN YES"
+	return "YES"
 
 @app.route("/leave", methods=["POST"])
 def leave():
