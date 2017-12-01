@@ -113,13 +113,13 @@ def find_closest_preceding_finger(ID):
 			return ith_finger
 	return NODE
 
-@node.route("/")
+@app.route("/")
 def main():
 	render_template("index.html")
 
 # TO DO: MAKE /exist POST function to check if a node already exists.NEIGHBORS
 
-@node.route("/join", methods=["POST", "GET"])
+@app.route("/join", methods=["POST", "GET"])
 def join():
 	# Generate ID for the node.
 	global NODE
@@ -164,13 +164,13 @@ def join():
 
 # Returns "YES" if the ID has already been taken
 # and "NO" otherwise.
-@node.route("/exist", methods=["POST"])
+@app.route("/exist", methods=["POST"])
 def exist():
 	recID = request.form['id']
 	# Do something to check if the node ID is taken or not.
 	return "NO"
 
-@node.route("/leave", methods=["POST"])
+@app.route("/leave", methods=["POST"])
 def leave():
 	# Let the nodes on your table know that you are leaving
 	# through a POST request.
