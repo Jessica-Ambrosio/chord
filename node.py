@@ -94,6 +94,7 @@ def test_message(message):
 	# and return its IP address or a "YES" "NO"
 	# answer if necessary.
 	send("NO")
+	render_template("response.html")
 
 
 @node.route("/leave")

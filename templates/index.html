@@ -1,85 +1,38 @@
-<!DOCTYPE HTML>
-<!--
-	Phantom by HTML5 UP
-	html5up.net | @ajlkn
-	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
--->
-<html>
-	<head>
-		<title>Chord Node</title>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<link rel="stylesheet" href="../static/css/main.css" />
-	</head>
-	<body>
-		<!-- Wrapper -->
-			<div id="wrapper">
-				<!-- Header -->
-				<header id="header">
-					<div class="inner">
-						<!-- Nav -->
-						<nav>
-							<ul>
-								<li><a href="#menu">Menu</a></li>
-							</ul>
-						</nav>
-					</div>
-				</header>
+{% extends "base.html" %}
+{% block content %}
 
-				<!-- Menu -->
-				<nav id="menu">
-					<h2>Menu</h2>
-					<ul>
-						<li><a href="index.html">Home</a></li>
-						<li><a href="generic.html">Ipsum veroeros</a></li>
-						<li><a href="generic.html">Tempus etiam</a></li>
-						<li><a href="generic.html">Consequat dolor</a></li>
-						<li><a href="elements.html">Elements</a></li>
-					</ul>
-				</nav>
+<!-- Main -->
+<div id="main">
+	<div class="inner">
+		<header>
+			<h1><center>Chord Node</center></h1>
+			<h2><center>Final Project | Building Distributed Systems</center></h2>
+		</header>
+		<section>
+			<p><center>Main Buttons to Use Chord<center></p>
+				<form action="/join" method="post">
+					<input class="button" type="submit" name="joinButton" value="Join">
+				</form>
+				<form action="/leave" method="post">
+					<input class="button" type="submit" name="leaveButton" value="Leave">
+				</form>
+				<form action="/search" method="post">
+					<a href="#" class="button">Search</a>
+				</form>
+				<form action="/upload" method="post">
+					<label class="button special icon fa-upload">
+						Upload File <input type="file" style="display:none;">
+					</label>
+				</form>
+				<form action="/file" method="post">
+					<p> Type the name of the file that you want to download.
+					<input type="text" name="file"> <br>
+					<input class="button special icon fa-download" type="submit" name="downButton" value="Download File">
+					</p>
+				</form>
+		</section>
+	</div> <!-- End of inner-->
+</div>
+<!-- End of Main-->
 
-				<!-- Main -->
-				<div id="main">
-					<div class="inner">
-						<header>
-							<h1><center>Chord Node</center></h1>
-							<h2><center>Final Project | Building Distributed Systems<center></h2>
-						</header>
-						<section>
-							<p><center>Main Buttons to Use Chord<center></p>
-								<form action="/join" method="post">
-									<input class="button" type="submit" name="joinButton" value="Join">
-								</form>
-								<form action="/leave" method="post">
-									<input class="button" type="submit" name="leaveButton" value="Leave">
-								</form>
-								<form action="/search" method="post">
-									<a href="#" class="button">Search</a>
-								</form>
-								<form action="/upload" method="post">
-									<label class="button special icon fa-upload">
-										Upload File <input type="file" style="display:none;">
-									</label>
-								</form>
-								<form action="/file" method="post">
-									<p> Type the name of the file that you want to download.
-									<input type="text" name="file"> <br>
-									<input class="button special icon fa-download" type="submit" name="downButton" value="Download File">
-									</p>
-								</form>
-						</section>
-					</div> <!-- End of inner-->
-				</div>
-
-				<!-- <button id="btnZeroTch" type="submit" class="btn btn-primary">Submit</button> -->
-
-			</div> <!-- End of wrapper -->
-
-		<!-- Scripts -->
-			<script src="../static/js/jquery.min.js"></script>
-			<script src="../static/js/skel.min.js"></script>
-			<script src="../static/js/util.js"></script>
-			<script src="../static/js/main.js"></script>
-		<!-- End Scripts -->
-	</body>
-</html>
+{% endblock %}
