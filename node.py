@@ -1,4 +1,3 @@
-
 from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
 import sys, math, os
@@ -34,7 +33,6 @@ def home():
 NEIGHBORS = []
 NODE = Node(None, None)
 
-
 # CHORD VARIABLES
 IDBITS = 3   		# Number of bits for ID
 SUCCESSOR = Node(None, None)
@@ -42,7 +40,6 @@ PREDECESSOR = Node(None, None)
 # key: i (for ith finger), value: (start, Node node)
 FINGERS = dict()
 # successor_list = []
-
 
 # Find the successor node of an ID on the Chord ring
 def find_successor(ID):
@@ -160,8 +157,8 @@ def join():
 # and "NO" otherwise.
 @app.route("/exist", methods=["POST"])
 def exist():
-	# Check if the request is correctly made. 
-	# and send an error otherwise. 
+	# Check if the request is correctly made.
+	# and send an error otherwise.
 	recID = request.form['id']
 	print "THIS IS THE RECEIVED ID " + str(recID)
 	return "YES"
@@ -172,8 +169,8 @@ def leave():
 	# through a POST request.
 	return "<h1>You have successfully exited chord.</h1>"
 
-# Function to verify that the file looked up/ downloaded 
-# has one of the allowed extensions. 
+# Function to verify that the file looked up/ downloaded
+# has one of the allowed extensions.
 def allowed_file(filename):
 	return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -191,7 +188,7 @@ def search():
 	# file dictionary. 
 	return "FILE"
 
-@app.route("/upload", methods=["POST"]) 
+@app.route("/upload", methods=["POST"])
 def upload():
 	successFiles = []
 	files = request.files.getlist("file[]")
@@ -220,12 +217,17 @@ def find_succesor_api():
 	resp.status_code = 200
 	return resp
 
-@app.route("/predecessor")
+@node.route("/predecessor")
 def findPred():
-	return predecessor
+	resp = jsonify({
+		"ip": PREDECESSOR.IP,
+		"id": PREDECESSOR.ID
+	})
+	resp.status_code = 200
+	return resp
 
 # Finds closest preceding finger.
-@app.route("/closest_preceding_finger", methods=["POST"])
+@node.route("/closest_preceding_finger", methods=["POST"])
 def find_closest_preceding_finger_api():
 	data = request.get_json()
 	closest_preceding_finger = find_closest_preceding_finger(data["id"])
@@ -297,7 +299,7 @@ def genID(addRandom):
     for index,char in enumerate(hexString):
         decimal += int (char) * 16 ** index
     if (addRandom):
-        decimal += random.randint(1, (2**idBits))
+        decimal += random.randint(1, (2**IDBITS))
     ID = decimal % (2 ** 3)
     return ID
 
