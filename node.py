@@ -10,6 +10,8 @@ import random
 import requests
 import csv
 
+# convert 'raise Exception' to 'print' because don't want Node to crash due to network problems
+
 UPLOAD_FOLDER = "static/uploads"
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
 
@@ -25,9 +27,9 @@ class Node:
 		self.ID = ID
 		self.FILES = {}
 
-@app.route("/")
-def home():
-	return render_template("index.html")
+# Depending on how long the functions become, we could separate this
+# into two files. One containing user functions, and the other one
+# with Chord functions only.
 
 # USER VARIABLES
 NEIGHBORS = []
@@ -76,9 +78,10 @@ def find_predecessor(ID):
 				raise Exception('/succesor to ' + node.IP + ' failed')
 			data = r.json()
 			succ = Node(data["ip"], int(data["id"]))
+
 		# check if [node] is [ID]'s predecessor
 		# print '(find_predecessor): successor of node ' + str(node.ID) + ' is ' + str(succ.ID)
-		if between(node.ID + 1, succ.ID, ID):
+		if between(next_ID(node.ID), succ.ID, ID):
 			# print str(ID) + ' is between ' + str(node.ID + 1) + ' and ' + str(succ.ID)
 			found = True
 		else:
@@ -97,11 +100,43 @@ def find_closest_preceding_finger(ID):
 	# loops from IDBITS to 1
 	for i in range(IDBITS, 0, -1):
 		ith_finger = FINGERS[i][1]
-		if between(NODE.ID + 1, ID - 1, ith_finger.ID):
+		# e.g x = 4, y = 5 or 4, then there does not exist a z that could
+		# be exclusive between 4 & 5
+		invalid = NODE.ID == ID or next_ID(NODE.ID) == ID
+		if not invalid and between(next_ID(NODE.ID), prev_ID(ID), ith_finger.ID):
 			return ith_finger
 	return NODE
 
-@app.route("/")
+def fix_fingers():
+	global FINGERS
+	idx = random.randint(0, IDBITS - 1)
+	FINGERS[idx] = find_successor(FINGERS[idx][0])
+
+def stabilize():
+	global SUCCESSOR
+	r = requests.get('https://' + SUCCESSOR.IP + ':5000/predecessor')
+	if r.status_code != 200:
+		raise Exception('Finding predecessor from ' + SUCCESSOR.ID + ' failed')
+	data = r.json()
+	# node is our successor's predecessor
+	succ_pred = Node(data["ip"], int(data["id"]))
+
+	# if our successor's predecessor is between us
+	invalid = next_ID(NODE.ID) == ID
+	if not invalid and between(next_ID(NODE.ID), prev_ID(succ.ID), pred.ID):
+		SUCCESSOR = succ_pred
+	r = requests.post('https://' + SUCCESSOR.IP + ':5000/notify', json={'id': NODE.ID, 'ip': NODE.IP})
+	if r.status_code != 200:
+		raise Exception('Failed to notify ' + SUCCESSOR.ID)
+
+def notify(node):
+	global PREDECESSOR
+	no_pred = PREDECESSOR.IP == None and PREDECESSOR.ID == None
+	invalid = next_ID(PREDECESSOR.ID) == NODE.ID
+	if no_pred or (not invalid and between(next_ID(PREDECESSOR.ID), prev_ID(NODE.ID), node.ID)):
+		PREDECESSOR = node
+
+@node.route("/")
 def main():
 	render_template("index.html")
 
@@ -208,6 +243,7 @@ def upload():
 # CHORD FUNCTIONS
 
 @app.route("/successor", methods=["GET"])
+>>>>>>> Add stabilization protocol, fix/add util functions for Chord ring arithmetic
 def find_succesor_api():
 	global SUCCESSOR
 	resp = jsonify({
@@ -242,13 +278,15 @@ def find_closest_preceding_finger_api():
 def stabilize():
 	return "peace"
 
-@app.route("/notify")
+@node.route("/notify", methods=['POST'])
 def notify():
-	return "notify"
+	data = request.get_json()
+	node = Node(data["id"], data["ip"])
+	notify(node)
 
-@app.route("/fix_finger")
-def fixFinger():
-	return "finger"
+	resp = jsonify({})
+	resp.status_code = 200
+	return resp
 
 # This function will receive a file, and it
 # will determine whether this node should keep it 
@@ -355,6 +393,14 @@ def between(a, b, c):
 		return c >= a or c <= b
 	else:
 		return a == c
+
+# return next ID on the Chord ring
+def next_ID(ID):
+	return ID + 1 if ID != math.pow(2, IDBITS) - 1 else 0
+
+# return previous ID on the Chord ring
+def prev_ID(ID):
+	return ID - 1 if ID != 0 else math.pow(2, IDBITS) - 1
 
 # END OF CHORD FUNCTIONS
 
