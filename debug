@@ -1,0 +1,14 @@
+NODE MAPPING
+0 monkey: `128.36.232.27`
+1 hare: 128.36.232.17
+3 hawk: 128.36.232.61
+6 lion: 128.36.232.39
+(see e.g in Chord paper)
+
+TEST JOIN
+1. Start up node 0, 1, 3 ('python node.py hardcode [NUM] join')
+2. Start up node 6
+3. Wait until finger tables + [succ/predec]essor of nodes 0, 1, 3 are fixed
+
+TEST SEARCH (& FIND SUCCESSOR/PREDECESSOR)
+1. Start up node 0, 1, 3 ('python node.py hardcode [NUM] search')
