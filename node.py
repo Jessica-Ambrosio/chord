@@ -146,6 +146,8 @@ def stabilize():
 	global SUCCESSOR
 	# find the successor node's predecessor
 	data, pred_result = make_http_request(SUCCESSOR.IP, 'predecessor', 'GET', None)
+
+	# successor has left; find new successor
 	if not pred_result:
 		found_new_succ = False
 		# try and find new successor by going through ring in clockwise order
@@ -157,7 +159,12 @@ def stabilize():
 				found_new_succ = True
 				print 'New successor is ' + str(new_succ.ID)
 				SUCCESSOR = new_succ
-				break
+
+				data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
+				if not notify_result:
+					print 'Failed to notify ' + str(SUCCESSOR.ID)
+
+				return
 
 		# could not find node's new successor
 		if not found_new_succ:
@@ -166,28 +173,21 @@ def stabilize():
 			print 'WARNING: Could not update successor'
 			print '==================================='
 			return
+	# check if successor has a new predecessor in between us & the successor
+	else:
+		# node is our successor's predecessor
+		succ_pred = Node(data["ip"], int(data["id"]))
 
+		# if our successor's predecessor is between us
+		invalid = next_ID(NODE.ID) == SUCCESSOR.ID
+		if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
+			print 'New successor is ' + str(succ_pred.ID)
+			SUCCESSOR = succ_pred
 
-
-		data, pred_result = make_http_request(SUCCESSOR.IP, 'predecessor', 'GET', None)
-		# node's new successor also cannot be contacted
-		if not pred_result:
-			print 'Failed to contact new successor ' + SUCCESSOR.IP
-			return
-
-	# node is our successor's predecessor
-	succ_pred = Node(data["ip"], int(data["id"]))
-
-	# if our successor's predecessor is between us
-	invalid = next_ID(NODE.ID) == SUCCESSOR.ID
-	if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
-		print 'New successor is ' + str(succ_pred.ID)
-		SUCCESSOR = succ_pred
-
-	# notify successor of our existence
-	data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
-	if not notify_result:
-		print 'Failed to notify ' + str(SUCCESSOR.ID)
+		# notify successor of our existence
+		data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
+		if not notify_result:
+			print 'Failed to notify ' + str(SUCCESSOR.ID)
 
 	# print 'Successor is ' + str(SUCCESSOR.ID)
 
@@ -205,6 +205,11 @@ def notify(node):
 
 	# no predecessor
 	if PREDECESSOR.IP == None and PREDECESSOR.ID == None:
+		print 'New predecessor is ' + str(node.ID)
+		PREDECESSOR = node
+
+	data, result = make_http_request(PREDECESSOR.IP, 'ping','GET', None)
+	if not result:
 		print 'New predecessor is ' + str(node.ID)
 		PREDECESSOR = node
 
@@ -260,6 +265,7 @@ def join():
 	else:
 		return "<h1>You are the only chord node in the network</h1>"
 
+# =============== NEED TO DISCUSS =========================
 # Returns "YES" if the ID has already been taken
 # and "NO" otherwise.
 @app.route("/exist", methods=["POST"])
@@ -270,6 +276,13 @@ def exist():
 	# Use fingre function to figure this out. 
 	print "THIS IS THE RECEIVED ID " + str(recID)
 	return "NO"
+
+@app.route("/ping", methods=["GET"])
+def ping():
+	resp = jsonify({})
+	resp.status_code = 200
+	return resp
+# =========================================================
 
 @app.route("/leave", methods=["POST"])
 def leave():
@@ -583,7 +596,7 @@ def print_finger_table(msg):
 	for key in FINGERS.keys():
 		print 'Finger ' + str(key) + ': Start: ' + str(FINGERS[key][0]) + ', Node: ' +str(FINGERS[key][1].ID)
 
-def print_succ_pred(msg):
+def print_succ_pred(msg=''):
 	if msg:
 		print msg
 	print 'Successor: ' + str(SUCCESSOR.ID) + ', Predecessor: ' + str(PREDECESSOR.ID)
@@ -628,7 +641,7 @@ if __name__ == "__main__":
 				SUCCESSOR = (FINGERS[1])[1]
 		elif sys.argv[1] == 'test':
 			NODE = Node(sys.argv[3],int(sys.argv[2]))
-				
+
 		if NODE.ID == 3 and sys.argv[3] == 'search':
 			for i in xrange(0, 8):
 				node = find_successor(i)
