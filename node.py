@@ -9,6 +9,7 @@ import nmap
 import random
 import requests
 import csv
+import threading
 
 # convert 'raise Exception' to 'print' because don't want Node to crash due to network problems
 
@@ -27,11 +28,16 @@ class Node:
 		self.ID = ID
 		self.FILES = {}
 
+@app.route("/", methods=["GET"])
+def home():
+	return render_template("index.html")
+
 # Depending on how long the functions become, we could separate this
 # into two files. One containing user functions, and the other one
 # with Chord functions only.
 
 # USER VARIABLES
+START_TIME = time.time()
 NEIGHBORS = []
 NODE = Node(None, None)
 
@@ -41,29 +47,33 @@ SUCCESSOR = Node(None, None)
 PREDECESSOR = Node(None, None)
 # key: i (for ith finger), value: (start, Node node)
 FINGERS = dict()
+MAX_RETRIES = 5
 # successor_list = []
 
+# CORE
 # Find the successor node of an ID on the Chord ring
 def find_successor(ID):
-	# print '(find_successor): finding successor of ' + str(ID)
+	# print '(Node' + str(NODE.ID) + ':find_successor): finding successor of ' + str(ID)
 	node = find_predecessor(ID)
-	# print '(find_successor): predecessor of ' + str(ID) + ' is ' + str(node.ID)
+	if null_node(node):
+		return Node(None, None)
 
 	succ = None
 	if node.IP == NODE.IP:
 		succ = SUCCESSOR
 	else:
-		r = requests.get('http://' + node.IP + ':5000/successor')
-		# LOOP X TIMES??
-		if r.status_code != 200:
-			raise Exception('/succesor to ' + node.IP + ' failed')
+		data, result = make_http_request(node.IP, 'successor', 'GET', None)
+		if not result:
+			return Node(None, None)
 
-		data = r.json()
 		succ = Node(data["ip"], int(data["id"]))
+	# print '(Node' + str(NODE.ID) + ':find_successor): successor of ' + str(ID) + ' is ' + str(succ.ID)
 	return succ
 
 def find_predecessor(ID):
 	global NODE, SUCCESSOR
+	# print '(Node' + str(NODE.ID) + ':find_predecessor): finding predecessor of ' + str(ID)
+
 	node = NODE
 	found = False
 	while not found:
@@ -72,11 +82,10 @@ def find_predecessor(ID):
 		if node == NODE:
 			succ = SUCCESSOR
 		else:
-			r = requests.get('http://' + node.IP + ':5000/successor')
-			# Does the error take timeouts into account? 
-			if r.status_code != 200:
-				raise Exception('/succesor to ' + node.IP + ' failed')
-			data = r.json()
+			data, result = make_http_request(node.IP, 'successor', 'GET', None)
+			if not result:
+				return Node(None, None)
+
 			succ = Node(data["ip"], int(data["id"]))
 
 		# check if [node] is [ID]'s predecessor
@@ -88,57 +97,117 @@ def find_predecessor(ID):
 			if node == NODE:
 				node = find_closest_preceding_finger(ID)
 			else:
-				r = requests.post('http://' + node.IP + ':5000/closest_preceding_finger', json={'id': ID})
-				if r.status_code != 200:
-					raise Exception('/closest_preceding_finger to ' + node.IP + ' failed')
-				data = r.json()
+				data, result = make_http_request(node.IP, 'closest_preceding_finger', 'POST', {'id': ID})
+				if not result:
+					return Node(None, None)
+
 				node = Node(data["ip"], int(data["id"]))
+
+	# print '(Node' + str(NODE.ID) + ':find_predecessor): predecessor of ' + str(ID) + ' is ' + str(node.ID)
 	return node
 
 def find_closest_preceding_finger(ID):
-	global NODE, FINGERS, IDBITS
 	# loops from IDBITS to 1
 	for i in range(IDBITS, 0, -1):
 		ith_finger = FINGERS[i][1]
 		# e.g x = 4, y = 5 or 4, then there does not exist a z that could
 		# be exclusive between 4 & 5
-		invalid = NODE.ID == ID or next_ID(NODE.ID) == ID
+		invalid = next_ID(NODE.ID) == ID
 		if not invalid and between(next_ID(NODE.ID), prev_ID(ID), ith_finger.ID):
 			return ith_finger
 	return NODE
 
+# STABILIZATION
 def fix_fingers():
 	global FINGERS
-	idx = random.randint(0, IDBITS - 1)
-	FINGERS[idx] = find_successor(FINGERS[idx][0])
+	# print_finger_table('Before fixing fingers')
+	idx = random.randint(1, IDBITS)
+	new_succ = find_successor(FINGERS[idx][0])
+	if not null_node(new_succ):
+		start = FINGERS[idx][0]
+		FINGERS[idx] = (start, new_succ)
+	# print_finger_table('Before fixing fingers')
+
+def run_fix_fingers():
+	while True:
+		# print_finger_table('Before fix_fingers')
+		fix_fingers()
+		print_finger_table('After [fix_fingers]')
+		print_succ_pred()
+		time.sleep(10)
 
 def stabilize():
 	global SUCCESSOR
-	r = requests.get('https://' + SUCCESSOR.IP + ':5000/predecessor')
-	if r.status_code != 200:
-		raise Exception('Finding predecessor from ' + SUCCESSOR.ID + ' failed')
-	data = r.json()
+	# find the successor node's predecessor
+	data, pred_result = make_http_request(SUCCESSOR.IP, 'predecessor', 'GET', None)
+	if not pred_result:
+		found_new_succ = False
+		# try and find new successor by going through ring in clockwise order
+		# and finding the first ID whose predecessor can be found
+
+		for ID in circular_range(SUCCESSOR.ID):
+			new_succ = find_predecessor(ID)
+			if not null_node(new_succ):
+				found_new_succ = True
+				print 'New successor is ' + str(new_succ.ID)
+				SUCCESSOR = new_succ
+				break
+
+		# could not find node's new successor
+		if not found_new_succ:
+			# for now, raise exception
+			print '==================================='
+			print 'WARNING: Could not update successor'
+			print '==================================='
+			return
+
+
+
+		data, pred_result = make_http_request(SUCCESSOR.IP, 'predecessor', 'GET', None)
+		# node's new successor also cannot be contacted
+		if not pred_result:
+			print 'Failed to contact new successor ' + SUCCESSOR.IP
+			return
+
 	# node is our successor's predecessor
 	succ_pred = Node(data["ip"], int(data["id"]))
 
 	# if our successor's predecessor is between us
-	invalid = next_ID(NODE.ID) == ID
-	if not invalid and between(next_ID(NODE.ID), prev_ID(succ.ID), pred.ID):
+	invalid = next_ID(NODE.ID) == SUCCESSOR.ID
+	if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
+		print 'New successor is ' + str(succ_pred.ID)
 		SUCCESSOR = succ_pred
-	r = requests.post('https://' + SUCCESSOR.IP + ':5000/notify', json={'id': NODE.ID, 'ip': NODE.IP})
-	if r.status_code != 200:
-		raise Exception('Failed to notify ' + SUCCESSOR.ID)
+
+	# notify successor of our existence
+	data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
+	if not notify_result:
+		print 'Failed to notify ' + str(SUCCESSOR.ID)
+
+	# print 'Successor is ' + str(SUCCESSOR.ID)
+
+def run_stabilize():
+	while True:
+		# print_finger_table('Before stabilize')
+		print '============[stabilize]=============='
+		stabilize()
+		print '====================================='
+		# print_finger_table('After stabilize')
+		time.sleep(10)
 
 def notify(node):
 	global PREDECESSOR
-	no_pred = PREDECESSOR.IP == None and PREDECESSOR.ID == None
-	invalid = next_ID(PREDECESSOR.ID) == NODE.ID
-	if no_pred or (not invalid and between(next_ID(PREDECESSOR.ID), prev_ID(NODE.ID), node.ID)):
+
+	# no predecessor
+	if PREDECESSOR.IP == None and PREDECESSOR.ID == None:
+		print 'New predecessor is ' + str(node.ID)
 		PREDECESSOR = node
 
-@node.route("/")
-def main():
-	render_template("index.html")
+	invalid = next_ID(PREDECESSOR.ID) == NODE.ID
+	if not invalid and between(next_ID(PREDECESSOR.ID), prev_ID(NODE.ID), node.ID):
+		print 'New predecessor is ' + str(node.ID)
+		PREDECESSOR = node
+	# print 'PREDECESSOR is ' + str(PREDECESSOR.ID)
+
 
 
 @app.route("/join", methods=["POST", "GET"])
@@ -149,11 +218,11 @@ def join():
 	# Scan the network to look for other active Chord nodes.
 	nm = nmap.PortScanner()
 	# We are assuming the protocol used is IPv4
- 	address = socket.gethostname() + "/24"   	
-	nm.scan(hosts=address, arguments="-p5000")	
+ 	address = socket.gethostname() + "/24"
+	nm.scan(hosts=address, arguments="-p5000")
 	counter = 0
 	for host in nm.all_hosts():
-		# Do not add more than 5 nodes. 
+		# Do not add more than 5 nodes.
 		if (counter > 4):
 			break
 		if nm[host]['tcp'][5000]['state'] == "open":
@@ -187,7 +256,6 @@ def join():
 	else:
 		return "<h1>You are the only chord node in the network</h1>"
 
-
 # Returns "YES" if the ID has already been taken
 # and "NO" otherwise.
 @app.route("/exist", methods=["POST"])
@@ -218,9 +286,9 @@ def search():
 	# 	if we already have it, return its location
 	# else
 	# 	Determine which node should have the file.
-	# 	Use the finger table to get to that node. 
-	# Once you get the file, hash it, and save it in the 
-	# file dictionary. 
+	# 	Use the finger table to get to that node.
+	# Once you get the file, hash it, and save it in the
+	# file dictionary.
 	return "FILE"
 
 @app.route("/upload", methods=["POST"])
@@ -252,14 +320,19 @@ def find_succesor_api():
 	resp.status_code = 200
 	return resp
 
-@app.route("/predecessor")
-def findPred():
-	resp = jsonify({
-		"ip": PREDECESSOR.IP,
-		"id": PREDECESSOR.ID
-	})
-	resp.status_code = 200
-	return resp
+@app.route("/predecessor", methods=["GET"])
+def find_predecessor_api():
+	if null_node(PREDECESSOR):
+		resp = jsonify({})
+		resp.status_code = 404
+		return resp
+	else:
+		resp = jsonify({
+			"ip": PREDECESSOR.IP,
+			"id": PREDECESSOR.ID
+		})
+		resp.status_code = 200
+		return resp
 
 # Finds closest preceding finger.
 @app.route("/closest_preceding_finger", methods=["POST"])
@@ -273,23 +346,27 @@ def find_closest_preceding_finger_api():
 	resp.status_code = 200
 	return resp
 
-@app.route("/stabilize")
-def stabilize():
-	return "peace"
-
-@node.route("/notify", methods=['POST'])
-def notify():
+@app.route("/notify", methods=["POST"])
+def notify_api():
 	data = request.get_json()
-	node = Node(data["id"], data["ip"])
+	node = Node(data["ip"], data["id"])
 	notify(node)
 
 	resp = jsonify({})
 	resp.status_code = 200
 	return resp
 
+@app.route("/fingers", methods=["GET"])
+def print_fingers():
+	for key in FINGERS.keys():
+		print 'Finger ' + str(key) + ': Start: ' + str(FINGERS[key][0]) + ', Node: ' +str(FINGERS[key][1].ID)
+	resp = jsonify({})
+	resp.status_code = 200
+	return resp
+
 # This function will receive a file, and it
-# will determine whether this node should keep it 
-# or send it to the appropriate node. 
+# will determine whether this node should keep it
+# or send it to the appropriate node.
 @app.route("/receiveFile")
 def recFile(info):
 	assert "nodeID" in request.form
@@ -299,7 +376,7 @@ def recFile(info):
 	nodeID = request.form["nodeID"]
 	fileName = request.form["fileName"]
 	if nodeID == NODE.ID:
-		# Keep the file. 
+		# Keep the file.
 		with codecs.open(os.path.join(app.config['UPLOAD_FOLDER'], fileName)) as f:
 			f.write(request.files['fileName'])
 	else:
@@ -311,11 +388,11 @@ def recFile(info):
 				sendNode = (fingers.get(i))[1]
 				break;
 		# Three options:
-		# This is the only node in the interval. The 
+		# This is the only node in the interval. The
 		# correct node does not exist. (nodeID = chord(fileName))
 		if sendNode != NODE.ID:
 			address = "http://" + sendNode.IP + ":5000/receiveFile"
-			try: 
+			try:
 				req = requests.post(address, data={'nodeID':nodeID, 'fileName':fileName},
 									 files={fileName: request.files['fileName']})
 				if r.status_code != 200:
@@ -323,10 +400,10 @@ def recFile(info):
 			except requests.exceptions.RequestException as e:
 				print e
 
-
 # addRandom -> boolean
 # Use addRandom = True whenever you need to generate
 # a new ID if the one generated first was already taken.
+>>>>>>> Fire stabilize, fix_fingers periodically; Fixing bugs (stabilize is still broken)
 def genID(addRandom):
     hostname = socket.gethostname()
     IP = socket.gethostbyname(hostname)
@@ -340,7 +417,7 @@ def genID(addRandom):
     ID = decimal % (2 ** 3)
     return ID
 
-# This function maps a file to a node. 
+# This function maps a file to a node.
 def chord(filename):
 	hashFile = hashlib.sha1(filename)
 	hexString = str(int(hashFile.hexdigest(), 16))
@@ -351,15 +428,15 @@ def chord(filename):
 	return node
 
 
-# Sends uploaded files to their respective nodes. 
+# Sends uploaded files to their respective nodes.
 def processUFiles(files):
 	for file in files:
-		# Save the files in NODE's list of files. 
+		# Save the files in NODE's list of files.
 		# To provide redundancy, keep a copy of the file and its key.
 		# This will make lookup a bit faster, and if the node leaves,
-		# someone will still have the file. 
+		# someone will still have the file.
 		NODE.FILES[hashlib.sha1(file.filename)] = "uploads"
-		# Find where the file should be sent to.  
+		# Find where the file should be sent to.
 		node = chord(file.filename)
 		print "CHORD HAS ASSIGNED THE FILE TO NODE: ",
 		print node
@@ -370,19 +447,36 @@ def processUFiles(files):
 				if between(interval[0], interval[1], node):
 					sendNode = (fingers.get(i))[1]
 					break;
-			address = "http://" + sendNode.IP + ":5000/receiveFile" # 
-			# Send the file to node. 
+			address = "http://" + sendNode.IP + ":5000/receiveFile" #
+			# Send the file to node.
 			print "THE FILE WILL BE SENT TO NODE: ",
 			print sendNode
 			with open(os.path.join(app.config['UPLOAD_FOLDER'], file.filename)) as f:
 				try:
-					r = requests.post(address, data={'nodeID':node, 'fileName':file.filename}, 
+					r = requests.post(address, data={'nodeID':node, 'fileName':file.filename},
 										files={file.filename: f}, timeout=5)
 					if r.status_code != 200:
 						raise Exception("Finger" + finger + "did not receive the file correctly.")
 				except requests.exceptions.RequestException as e:
 					print finger + "could not be reached."
-				
+
+
+def make_http_request(target, endpoint, method, payload):
+	tries = 0
+	while tries < MAX_RETRIES:
+		try:
+			if method.upper() == 'GET':
+				r = requests.get('http://' + target + ':5000/' + endpoint)
+			elif method.upper() == 'POST':
+				r = requests.post('http://' + target + ':5000/' + endpoint, json=payload)
+			if r.status_code == 200:
+				return (r.json(), True)
+		except:
+			pass
+			# print 'Failed to establish connection with ' + str(target)
+
+		tries += 1
+	return (None, False)
 
 # checks if ID c is (inclusive) between a & b in the Chord ring
 def between(a, b, c):
@@ -401,11 +495,46 @@ def next_ID(ID):
 def prev_ID(ID):
 	return ID - 1 if ID != 0 else math.pow(2, IDBITS) - 1
 
+def circular_range(start):
+	l = []
+	ring_size = int(math.pow(2, IDBITS))
+	for i in range(1, ring_size):
+		l.append((start + i) % ring_size)
+	return l
+
+def null_node(node):
+	return node.ID == None and node.IP == None
+
+def print_finger_table(msg):
+	print msg
+	for key in FINGERS.keys():
+		print 'Finger ' + str(key) + ': Start: ' + str(FINGERS[key][0]) + ', Node: ' +str(FINGERS[key][1].ID)
+
+def print_succ_pred(msg):
+	if msg:
+		print msg
+	print 'Successor: ' + str(SUCCESSOR.ID) + ', Predecessor: ' + str(PREDECESSOR.ID)
+
 # END OF CHORD FUNCTIONS
+# def job1():
+# 	tries = 0
+# 	while tries < 4:
+# 		print 'Are we there yet?'
+# 		time.sleep(5)
+# 		tries += 1
+#
+# def job2():
+# 	tries = 0
+# 	while tries < 2:
+# 		print 'No.'
+# 		time.sleep(10)
+# 		tries += 1
+# 		print FINGERS
 
 if __name__ == "__main__":
 	if len(sys.argv) > 1:
-		if sys.argv[1] == 'hardcode':
+		if sys.argv[1] == 'demo':
+			assigned_node = False
 			with open('state' + sys.argv[2] + '.csv', 'rb') as f:
 				reader = csv.reader(f)
 				arg_list = list(reader)
@@ -415,17 +544,32 @@ if __name__ == "__main__":
 						start, ID, IP = arg
 						FINGERS[idx + 1] = (int(start), Node(IP.strip(), int(ID)))
 					elif len(arg) == 2:
-						ID, IP = arg
-						NODE = Node(IP.strip(), int(ID))
+						if not assigned_node:
+							ID, IP = arg
+							NODE = Node(IP.strip(), int(ID))
+							assigned_node = True
+						else:
+							ID, IP = arg
+							PREDECESSOR = Node(IP.strip(), int(ID))
+
 				SUCCESSOR = (FINGERS[1])[1]
-	# print FINGERS
-	# print SUCCESSOR.ID
-	# print NODE.ID
 
-	if NODE.ID == 3:
-		for i in range(0, 8):
-			node = find_successor(i)
-			print 'Successor of ' + str(i) + ' is ' + str(node.ID)
+		if NODE.ID == 3 and sys.argv[3] == 'search':
+			for i in range(0, 8):
+				node = find_successor(i)
+				print 'File w/ key' + str(i) + ' is in ' + str(node.ID)
 
-	app.debug = True
+		if sys.argv[3] == 'join':
+			print_finger_table('Finger table on joining')
+
+			# schedule [stabilize] and [fix_fingers] to run periodically
+			t1 = threading.Thread(target=run_stabilize)
+			t1.daemon = True
+			t1.start()
+
+			t2 = threading.Thread(target=run_fix_fingers)
+			t2.daemon = True
+			t2.start()
+
+	# app.debug = True
 	app.run(host="0.0.0.0", port=5000)
