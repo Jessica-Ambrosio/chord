@@ -126,18 +126,20 @@ def find_closest_preceding_finger(ID):
 # STABILIZATION
 def fix_fingers():
 	global FINGERS
-	# print_finger_table('Before fixing fingers')
 	idx = random.randint(1, IDBITS)
+	print 'Check if finger ' + str(idx) + ' needs to be fixed'
 	new_succ = find_successor(FINGERS[idx][0])
 	if not null_node(new_succ):
 		start = FINGERS[idx][0]
+		print 'Finger ' + str(idx) + ' is now Node ' + str(new_succ.ID)
 		FINGERS[idx] = (start, new_succ)
-	# print_finger_table('Before fixing fingers')
 
 def run_fix_fingers():
 	while True:
 		# print_finger_table('Before fix_fingers')
+		print '============[fix_fingers]=============='
 		fix_fingers()
+		print '======================================='
 		print_finger_table('After [fix_fingers]')
 		print_succ_pred()
 		time.sleep(10)
@@ -154,6 +156,7 @@ def stabilize():
 		# and finding the first ID whose predecessor can be found
 
 		for ID in circular_range(SUCCESSOR.ID):
+			old_succ = SUCCESSOR
 			new_succ = find_predecessor(ID)
 			if not null_node(new_succ):
 				found_new_succ = True
@@ -161,8 +164,11 @@ def stabilize():
 				SUCCESSOR = new_succ
 
 				data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
+				# "fixing the gap" (i.e successor & predecessor of the leaving node fixing their predecessor & successor)
+				# has to be atomic
 				if not notify_result:
 					print 'Failed to notify ' + str(SUCCESSOR.ID)
+					SUCCESSOR = old_succ
 
 				return
 
@@ -265,6 +271,17 @@ def join():
 	else:
 		return "<h1>You are the only chord node in the network</h1>"
 
+def makeFingers():
+	for neighbor in NEIGHBORS:
+		data, result = make_http_request(neighbor, 'successor', 'POST', {'id': NODE.ID})
+		if result:
+			SUCCESSOR = Node(data["ip"], data["id"])
+			for i in range(1, IDBITS + 1):
+				start = (NODE.ID + math.pow(2, i-1)) % math.pow(2, IDBITS)
+				FINGERS[i] = (start, SUCCESSOR)
+		else:
+			raise Exception('FAILED TO SETUP FINGER TABLE. ABORT!')
+
 # =============== NEED TO DISCUSS =========================
 # Returns "YES" if the ID has already been taken
 # and "NO" otherwise.
@@ -286,9 +303,23 @@ def ping():
 
 @app.route("/leave", methods=["POST"])
 def leave():
+	# MOVE FILES
+
 	# Let the nodes on your table know that you are leaving
 	# through a POST request.
+	# ======================== DO WE EVEN NEED THIS? MORE ROBUST TO RELY ON STABILIZE ==============================
+	# make_http_request(PREDECESSOR.ID, 'leave_notice', 'POST', {'node_leaving': 'SUCCESSOR', 'ip': SUCCESSOR.IP, 'id': SUCCESSOR.ID})
+	# make_http_request(SUCCESSOR.ID, 'leave_notice', 'POST', {'node_leaving': 'PREDECESSOR', 'ip': PREDECESSOR.IP, 'id': PREDECESSOR.ID})
 	return "<h1>You have successfully exited chord.</h1>"
+
+@app.route("/leave_notice", methods=["POST"])
+def handle_leave_notice():
+	data = request.get_json()
+	IP, ID, node_leaving = data["ip"], data["id"], data["node_leaving"]
+	if node_leaving.upper() == 'SUCCESSOR':
+		SUCCESSOR = Node(IP, ID)
+	elif node_leaving.upper() == 'PREDECESSOR':
+		PREDECESSOR = Node(IP, ID)
 
 # Function to verify that the file looked up/ downloaded
 # has one of the allowed extensions.
@@ -350,15 +381,30 @@ def upload():
 
 # CHORD FUNCTIONS
 
-@app.route("/successor", methods=["GET"])
+@app.route("/successor", methods=["GET", "POST"])
 def find_succesor_api():
 	global SUCCESSOR
-	resp = jsonify({
-		"ip": SUCCESSOR.IP,
-		"id": SUCCESSOR.ID
-	})
-	resp.status_code = 200
-	return resp
+	if request.method == 'GET':
+		resp = jsonify({
+			"ip": SUCCESSOR.IP,
+			"id": SUCCESSOR.ID
+		})
+		resp.status_code = 200
+		return resp
+	elif request.method == 'POST':
+		data = request.get_json()
+		node = find_successor(data["id"])
+		if null_node(node):
+			resp = jsonify({})
+			resp.status_code = 404
+			return resp
+
+		resp = jsonify({
+			"ip": node.IP,
+			"id": node.ID
+		})
+		resp.status_code = 200
+		return resp
 
 @app.route("/predecessor", methods=["GET"])
 def find_predecessor_api():
