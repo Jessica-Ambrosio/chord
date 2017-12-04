@@ -1,4 +1,3 @@
-
 from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
 import sys, math, os
@@ -11,6 +10,11 @@ import random
 import requests
 import csv
 import threading
+<<<<<<< HEAD
+
+# convert 'raise Exception' to 'print' because don't want Node to crash due to network problems
+=======
+>>>>>>> merge of stabilize and tested uploads
 
 UPLOAD_FOLDER = "static/uploads"
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
@@ -27,7 +31,7 @@ class Node:
 		self.ID = ID
 		self.FILES = {}
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
 	return render_template("index.html")
 
@@ -40,7 +44,6 @@ START_TIME = time.time()
 NEIGHBORS = []
 NODE = Node(None, None)
 
-
 # CHORD VARIABLES
 IDBITS = 3   		# Number of bits for ID
 SUCCESSOR = Node(None, None)
@@ -50,7 +53,10 @@ FINGERS = dict()
 MAX_RETRIES = 5
 # successor_list = []
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> merge of stabilize and tested uploads
 # CORE
 # Find the successor node of an ID on the Chord ring
 def find_successor(ID):
@@ -91,7 +97,7 @@ def find_predecessor(ID):
 
 		# check if [node] is [ID]'s predecessor
 		# print '(find_predecessor): successor of node ' + str(node.ID) + ' is ' + str(succ.ID)
-		if between(node.ID + 1, succ.ID, ID):
+		if between(next_ID(node.ID), succ.ID, ID):
 			# print str(ID) + ' is between ' + str(node.ID + 1) + ' and ' + str(succ.ID)
 			found = True
 		else:
@@ -118,7 +124,10 @@ def find_closest_preceding_finger(ID):
 			return ith_finger
 	return NODE
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> merge of stabilize and tested uploads
 # STABILIZATION
 def fix_fingers():
 	global FINGERS
@@ -209,6 +218,10 @@ def notify(node):
 		print 'New predecessor is ' + str(node.ID)
 		PREDECESSOR = node
 	# print 'PREDECESSOR is ' + str(PREDECESSOR.ID)
+<<<<<<< HEAD
+
+=======
+>>>>>>> merge of stabilize and tested uploads
 
 
 @app.route("/join", methods=["POST", "GET"])
@@ -219,7 +232,11 @@ def join():
 	# Scan the network to look for other active Chord nodes.
 	nm = nmap.PortScanner()
 	# We are assuming the protocol used is IPv4
+<<<<<<< HEAD
  	address = socket.gethostname() + "/24"
+=======
+	address = socket.gethostname() + "/24"
+>>>>>>> merge of stabilize and tested uploads
 	nm.scan(hosts=address, arguments="-p5000")
 	counter = 0
 	for host in nm.all_hosts():
@@ -256,6 +273,8 @@ def join():
 	else:
 		return "<h1>You are the only chord node in the network</h1>"
 
+<<<<<<< HEAD
+=======
 	# HARDCODE FOR TESTING PURPOSES:
 	# key: i (for ith finger), value: (start, Node node)
 	# global FINGERS
@@ -265,6 +284,7 @@ def join():
 	# FINGERS[2] = (5, successor)
 	# return "welcome to chord"
 
+>>>>>>> merge of stabilize and tested uploads
 # Returns "YES" if the ID has already been taken
 # and "NO" otherwise.
 @app.route("/exist", methods=["POST"])
@@ -379,13 +399,44 @@ def print_fingers():
 # This function will receive a file, and it
 # will determine whether this node should keep it
 # or send it to the appropriate node.
+<<<<<<< HEAD
+@app.route("/receiveFile")
+def recFile(info):
+=======
 @app.route("/receiveFile", methods=["POST"])
 def recFile():
+>>>>>>> merge of stabilize and tested uploads
 	assert "nodeID" in request.form
 	assert "fileName" in request.form
  	# Check if this is correct.
 	nodeID = int(request.form["nodeID"]) # File destination
 	fileName = request.form["fileName"]
+<<<<<<< HEAD
+	if nodeID == NODE.ID:
+		# Keep the file.
+		with codecs.open(os.path.join(app.config['UPLOAD_FOLDER'], fileName)) as f:
+			f.write(request.files['fileName'])
+	else:
+		# Try to figure out if the correct node exists.
+		sendNode = 0
+		for i in range(0,3):
+			interval = ((fingers.get(i))[0], (fingers.get(i))[0] + 2**i)
+			if between(interval[0], interval[1], nodeID):
+				sendNode = (fingers.get(i))[1]
+				break;
+		# Three options:
+		# This is the only node in the interval. The
+		# correct node does not exist. (nodeID = chord(fileName))
+		if sendNode != NODE.ID:
+			address = "http://" + sendNode.IP + ":5000/receiveFile"
+			try:
+				req = requests.post(address, data={'nodeID':nodeID, 'fileName':fileName},
+									 files={fileName: request.files['fileName']})
+				if r.status_code != 200:
+					raise Exception("Finger" + finger + "did not receive the file correctly.")
+			except requests.exceptions.RequestException as e:
+				print e
+=======
 	sender = int(request.form["sender"])
 	keepFile = True
 	if nodeID != NODE.ID:
@@ -425,11 +476,12 @@ def recFile():
 		file = request.files[fileName]
 		file.save(os.path.join(".", file.filename))
 		return "SUCCESS"
-
+>>>>>>> merge of stabilize and tested uploads
 
 # addRandom -> boolean
 # Use addRandom = True whenever you need to generate
 # a new ID if the one generated first was already taken.
+>>>>>>> Fire stabilize, fix_fingers periodically; Fixing bugs (stabilize is still broken)
 def genID(addRandom):
     hostname = socket.gethostname()
     IP = socket.gethostbyname(hostname)
@@ -439,7 +491,7 @@ def genID(addRandom):
     for index,char in enumerate(hexString):
         decimal += int (char) * 16 ** index
     if (addRandom):
-        decimal += random.randint(1, (2**idBits))
+        decimal += random.randint(1, (2**IDBITS))
     ID = decimal % (2 ** 3)
     return ID
 
@@ -455,16 +507,27 @@ def chord(filename):
 
 
 # Sends uploaded files to their respective nodes.
+<<<<<<< HEAD
+def processUFiles(files):
+	for file in files:
+=======
 def processUFiles(fileNames):
 	succFiles = []
 	for fileName in fileNames:
+>>>>>>> merge of stabilize and tested uploads
 		# Save the files in NODE's list of files.
 		# To provide redundancy, keep a copy of the file and its key.
 		# This will make lookup a bit faster, and if the node leaves,
 		# someone will still have the file.
+<<<<<<< HEAD
+		NODE.FILES[hashlib.sha1(file.filename)] = "uploads"
+		# Find where the file should be sent to.
+		node = chord(file.filename)
+=======
 		NODE.FILES[hashlib.sha1(fileName)] = "uploads"
 		# Find where the file should be sent to.
 		node = chord(fileName)
+>>>>>>> merge of stabilize and tested uploads
 		print "CHORD HAS ASSIGNED THE FILE TO NODE: ",
 		print node
 		sendNode = None
@@ -474,6 +537,16 @@ def processUFiles(fileNames):
 				if between(interval[0], interval[1], node):
 					sendNode = FINGERS[i][1]
 					break;
+<<<<<<< HEAD
+			address = "http://" + sendNode.IP + ":5000/receiveFile" #
+			# Send the file to node.
+			print "THE FILE WILL BE SENT TO NODE: ",
+			print sendNode
+			with open(os.path.join(app.config['UPLOAD_FOLDER'], file.filename)) as f:
+				try:
+					r = requests.post(address, data={'nodeID':node, 'fileName':file.filename},
+										files={file.filename: f}, timeout=5)
+=======
 			address = "http://" + sendNode.IP + ":5000/receiveFile"
 			# Send the file to node.
 			# print "THE FILE WILL BE SENT TO NODE: ",
@@ -482,6 +555,7 @@ def processUFiles(fileNames):
 				try:
 					r = requests.post(address, data={'nodeID':node, 'fileName':fileName,
 					'sender':str(NODE.ID)}, files={fileName: f}, timeout=15)
+>>>>>>> merge of stabilize and tested uploads
 					if r.status_code != 200:
 						print r.text
 						print "Node " + str(sendNode.ID) + " did not receive" + fileName + "correctly."
@@ -493,9 +567,13 @@ def processUFiles(fileNames):
 							print "Stabilization inititated." # The other nodes must have initialized
 															  # stabilization at this point.
 				except requests.exceptions.RequestException as e:
+<<<<<<< HEAD
+					print finger + "could not be reached."
+=======
 					print str(sendNode.ID) + " could not be reached."
 					# Use stabilize
 	return succFiles
+>>>>>>> merge of stabilize and tested uploads
 
 
 def make_http_request(target, endpoint, method, payload):
@@ -553,10 +631,25 @@ def print_succ_pred(msg):
 	print 'Successor: ' + str(SUCCESSOR.ID) + ', Predecessor: ' + str(PREDECESSOR.ID)
 
 # END OF CHORD FUNCTIONS
+# def job1():
+# 	tries = 0
+# 	while tries < 4:
+# 		print 'Are we there yet?'
+# 		time.sleep(5)
+# 		tries += 1
+#
+# def job2():
+# 	tries = 0
+# 	while tries < 2:
+# 		print 'No.'
+# 		time.sleep(10)
+# 		tries += 1
+# 		print FINGERS
 
 if __name__ == "__main__":
 	if len(sys.argv) > 1:
-		if sys.argv[1] == 'hardcode':
+		if sys.argv[1] == 'demo':
+			assigned_node = False
 			with open('state' + sys.argv[2] + '.csv', 'rb') as f:
 				reader = csv.reader(f)
 				arg_list = list(reader)
@@ -566,11 +659,20 @@ if __name__ == "__main__":
 						start, ID, IP = arg
 						FINGERS[idx + 1] = (int(start), Node(IP.strip(), int(ID)))
 					elif len(arg) == 2:
-						ID, IP = arg
-						NODE = Node(IP.strip(), int(ID))
+						if not assigned_node:
+							ID, IP = arg
+							NODE = Node(IP.strip(), int(ID))
+							assigned_node = True
+						else:
+							ID, IP = arg
+							PREDECESSOR = Node(IP.strip(), int(ID))
+
 				SUCCESSOR = (FINGERS[1])[1]
+<<<<<<< HEAD
+=======
 		elif sys.argv[1] == 'test':
 			NODE = Node(sys.argv[3],int(sys.argv[2]))
+>>>>>>> merge of stabilize and tested uploads
 
 		if NODE.ID == 3 and sys.argv[3] == 'search':
 			for i in range(0, 8):
@@ -589,5 +691,5 @@ if __name__ == "__main__":
 			t2.daemon = True
 			t2.start()
 
-	app.debug = True
+	# app.debug = True
 	app.run(host="0.0.0.0", port=5000)
