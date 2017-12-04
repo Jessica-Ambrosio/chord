@@ -24,6 +24,7 @@ class Node:
 	def __init__(self, IP, ID):
 		self.IP = IP
 		self.ID = ID
+		self.FILES = {}
 
 @app.route("/")
 def home():
@@ -73,6 +74,7 @@ def find_predecessor(ID):
 			succ = SUCCESSOR
 		else:
 			r = requests.get('http://' + node.IP + ':5000/successor')
+			# Does the error take timeouts into account? 
 			if r.status_code != 200:
 				raise Exception('/succesor to ' + node.IP + ' failed')
 			data = r.json()
@@ -106,7 +108,6 @@ def find_closest_preceding_finger(ID):
 def main():
 	render_template("index.html")
 
-# TO DO: MAKE /exist POST function to check if a node already exists.NEIGHBORS
 
 @app.route("/join", methods=["POST", "GET"])
 def join():
@@ -115,11 +116,12 @@ def join():
 	NODE.ID = genID(False)
 	# Scan the network to look for other active Chord nodes.
 	nm = nmap.PortScanner()
- 	address = socket.gethostname() + "/24"   	# We are assuming the protocol used is IPv4
-	nm.scan(hosts=address, arguments="-p5000")	# All the chord instances will run on port 5000
+	# We are assuming the protocol used is IPv4
+ 	address = socket.gethostname() + "/24"   	
+	nm.scan(hosts=address, arguments="-p5000")	
 	counter = 0
 	for host in nm.all_hosts():
-		# Do not add more than 5 nodes. We do not need to talk to all the nodes active.
+		# Do not add more than 5 nodes. 
 		if (counter > 4):
 			break
 		if nm[host]['tcp'][5000]['state'] == "open":
@@ -132,9 +134,10 @@ def join():
 		for neighbor in NEIGHBORS:
 			try:
 				r = ""
-				r = requests.post("http://" + neighbor + ":5000/exist", data={'id':NODE.ID}, timeout=5)
+				r = requests.post("http://" + neighbor + ":5000/exist",
+										 data={'id':NODE.ID}, timeout=5)
 				if (not (r == "")):
-					print "the request is not empty"
+					#print "the request is not empty"
 					# print r.text 	   # For debugging purposes.
 					if r.text == "YES": # The node already exists.
 						idTaken = True
@@ -143,11 +146,11 @@ def join():
 				print e
 		if (idTaken):
 			# changeID()
-			print "THE ID IS TAKEN"
+			#print "THE ID IS TAKEN"
 			return "Generate a new ID"
 		else:
 			# makeFingers() # Make the finger table! :D
-			print "WELCOME TO CHORD"
+			#print "WELCOME TO CHORD"
 			return "Welcome to CHORD"
 	else:
 		return "<h1>You are the only chord node in the network</h1>"
@@ -160,6 +163,7 @@ def exist():
 	# Check if the request is correctly made. 
 	# and send an error otherwise. 
 	recID = request.form['id']
+	print "THIS IS THE RECEIVED ID " + str(recID)
 	return "YES"
 
 @app.route("/leave", methods=["POST"])
@@ -173,8 +177,18 @@ def leave():
 def allowed_file(filename):
 	return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route("/search", methods=["POST"]) # This will be a GET request.
+@app.route("/searchFile", methods=["POST"])
 def search():
+	fileName = request.form.get("fileName", None)
+	# Hash the name of the file.
+	# Check if we already have the file on the uploads folder
+	# or in the downloads folder.
+	# 	if we already have it, return its location
+	# else
+	# 	Determine which node should have the file.
+	# 	Use the finger table to get to that node. 
+	# Once you get the file, hash it, and save it in the 
+	# file dictionary. 
 	return "FILE"
 
 @app.route("/upload", methods=["POST"]) 
@@ -188,6 +202,7 @@ def upload():
 			successFiles.append(file.filename)
 	if (not successFiles):
 		return render_template("uploaded.html", successFiles=None)
+	processUFiles(successFiles)
 	return render_template("uploaded.html", successFiles=successFiles)
 
 # END OF USER FUNCTIONS
@@ -233,8 +248,46 @@ def notify():
 def fixFinger():
 	return "finger"
 
-# Fix this thing to ensure that it generates different IDs.
-# For now, it's returning 0.0
+# This function will receive a file, and it
+# will determine whether this node should keep it 
+# or send it to the appropriate node. 
+@app.route("/receiveFile")
+def recFile(info):
+	assert "nodeID" in request.form
+	assert "fileName" in request.form
+	assert request.form["fileName"] in request.files
+ 	# Check if this is correct.
+	nodeID = request.form["nodeID"]
+	fileName = request.form["fileName"]
+	if nodeID == NODE.ID:
+		# Keep the file. 
+		with codecs.open(os.path.join(app.config['UPLOAD_FOLDER'], fileName)) as f:
+			f.write(request.files['fileName'])
+	else:
+		# Try to figure out if the correct node exists.
+		sendNode = 0
+		for i in range(0,3):
+			interval = ((fingers.get(i))[0], (fingers.get(i))[0] + 2**i)
+			if between(interval[0], interval[1], nodeID):
+				sendNode = (fingers.get(i))[1]
+				break;
+		# Three options:
+		# This is the only node in the interval. The 
+		# correct node does not exist. (nodeID = chord(fileName))
+		if sendNode != NODE.ID:
+			address = "http://" + sendNode.IP + ":5000/receiveFile"
+			try: 
+				req = requests.post(address, data={'nodeID':nodeID, 'fileName':fileName},
+									 files={fileName: request.files['fileName']})
+				if r.status_code != 200:
+					raise Exception("Finger" + finger + "did not receive the file correctly.")
+			except requests.exceptions.RequestException as e:
+				print e
+
+
+# addRandom -> boolean
+# Use addRandom = True whenever you need to generate
+# a new ID if the one generated first was already taken.
 def genID(addRandom):
     hostname = socket.gethostname()
     IP = socket.gethostbyname(hostname)
@@ -246,7 +299,51 @@ def genID(addRandom):
     if (addRandom):
         decimal += random.randint(1, (2**idBits))
     ID = decimal % (2 ** 3)
-    return str(ID)
+    return ID
+
+# This function maps a file to a node. 
+def chord(filename):
+	hashFile = hashlib.sha1(filename)
+	hexString = str(int(hashFile.hexdigest(), 16))
+	decimal = 0
+	for index,char in enumerate(hexString):
+		decimal += int (char) * 16 ** index
+	node = decimal % (2 ** 3)
+	return node
+
+
+# Sends uploaded files to their respective nodes. 
+def processUFiles(files):
+	for file in files:
+		# Save the files in NODE's list of files. 
+		# To provide redundancy, keep a copy of the file and its key.
+		# This will make lookup a bit faster, and if the node leaves,
+		# someone will still have the file. 
+		NODE.FILES[hashlib.sha1(file.filename)] = "uploads"
+		# Find where the file should be sent to.  
+		node = chord(file.filename)
+		print "CHORD HAS ASSIGNED THE FILE TO NODE: ",
+		print node
+		sendNode = node
+		if node != NODE.ID:
+			for i in range(0,3):
+				interval = ((fingers.get(i))[0], (fingers.get(i))[0] + 2**i)
+				if between(interval[0], interval[1], node):
+					sendNode = (fingers.get(i))[1]
+					break;
+			address = "http://" + sendNode.IP + ":5000/receiveFile" # 
+			# Send the file to node. 
+			print "THE FILE WILL BE SENT TO NODE: ",
+			print sendNode
+			with open(os.path.join(app.config['UPLOAD_FOLDER'], file.filename)) as f:
+				try:
+					r = requests.post(address, data={'nodeID':node, 'fileName':file.filename}, 
+										files={file.filename: f}, timeout=5)
+					if r.status_code != 200:
+						raise Exception("Finger" + finger + "did not receive the file correctly.")
+				except requests.exceptions.RequestException as e:
+					print finger + "could not be reached."
+				
 
 # checks if ID c is (inclusive) between a & b in the Chord ring
 def between(a, b, c):

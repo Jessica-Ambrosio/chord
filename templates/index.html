@@ -16,18 +16,18 @@
 				<form action="/leave" method="POST">
 					<input class="button" type="submit" name="leaveButton" value="Leave">
 				</form>
-				<form action="/search" method="POST">
+<!-- 				<form action="/search" method="POST">
 					<a href="#" class="button">Search</a>
-				</form>
+				</form> -->
 				<form action="/upload" method="POST" enctype="multipart/form-data">
 					<label>
 						Choose File(s) to Upload <input type="file" name="file[]" multiple>
 					</label>
 					<input class="button special icon fa-upload" type="submit" value="Upload">
 				</form>
-				<form action="/file" method="POST">
+				<form action="/searchFile" method="POST">
 					<p> Type the name of the file that you want to download.
-					<input type="text" name="file"> <br>
+					<input type="text" name="fileName"> <br>
 					<input class="button special icon fa-download" type="submit" name="downButton" value="Download File">
 					</p>
 				</form>
