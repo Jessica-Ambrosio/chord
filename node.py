@@ -400,7 +400,7 @@ def recFile():
 					req = requests.post(address, data={'nodeID':nodeID, 'fileName':fileName,
 								'sender':str(NODE.ID)}, files={fileName: file}, timeout=15)
 					if req.status_code != 200:
-						print r.text
+						print req.text
 						return "FAILURE"
 					print req.text
 					return "SUCESS"
@@ -448,7 +448,6 @@ def chord(filename):
 def processUFiles(fileNames):
 	succFiles = []
 	for fileName in fileNames:
-
 		# Save the files in NODE's list of files.
 		# To provide redundancy, keep a copy of the file and its key.
 		# This will make lookup a bit faster, and if the node leaves,
@@ -584,6 +583,8 @@ if __name__ == "__main__":
 							PREDECESSOR = Node(IP.strip(), int(ID))
 
 				SUCCESSOR = (FINGERS[1])[1]
+		elif sys.argv[1] == 'test':
+			NODE = Node(sys.argv[3],int(sys.argv[2]))
 				
 		if NODE.ID == 3 and sys.argv[3] == 'search':
 			for i in range(0, 8):
