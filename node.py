@@ -25,6 +25,7 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
 app = Flask(__name__)
 app.secret_key = "Distributed4Lyfe"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
 
 # [IP]: string
 # [ID]: integer
