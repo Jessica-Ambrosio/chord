@@ -408,6 +408,7 @@ def search():
 	else:
 		node = chord(fileName)
 		successor = find_successor(node)
+		address = "http://" + successor.IP + ":5000/fileRequest"
 		try:
 			req = requests.post(address, data={'fileName':fileName,}, timeout=15)
 			if req.status_code == 200:
