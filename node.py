@@ -414,6 +414,9 @@ def search():
 			req = requests.post(address, data={'fileName':fileName,}, timeout=15)
 			print "THIS IS THE REQUEST RESPONSE " + str(req.text)
 			if req.status_code == 200:
+				print dir(req)
+				print '====req.content===='
+				print req.content
 				file = req.files[fileName]
 				file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
 				NODE.FILES[hashlib.sha1(fileName)] = "downloads"
