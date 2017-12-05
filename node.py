@@ -31,7 +31,10 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 class Node:
 	def __init__(self, IP, ID):
 		self.IP = IP
-		self.ID = ID
+		if ID == None:
+			self.ID = None
+		else:
+			self.ID = int(ID)
 		self.FILES = {}
 
 @app.route("/", methods=["GET"])
@@ -149,11 +152,20 @@ def run_fix_fingers():
 
 def stabilize():
 	global SUCCESSOR
+
+	# node is 1st node in network
+	if SUCCESSOR.ID == NODE.ID:
+		print '[stabilize] SUCCESSOR.ID == NODE.ID'
+		data = {"id": PREDECESSOR.ID, "ip": PREDECESSOR.IP}
+		pred_result = True
 	# find the successor node's predecessor
-	data, pred_result = make_http_request(SUCCESSOR.IP, 'predecessor', 'GET', None)
+	else:
+		print '[stabilize] SUCCESSOR.ID != NODE.ID'
+		data, pred_result = make_http_request(SUCCESSOR.IP, 'predecessor', 'GET', None)
 
 	# successor has left; find new successor
 	if not pred_result:
+		print '[stabilize] successor has left, trying to find new successor'
 		found_new_succ = False
 		# try and find new successor by going through ring in clockwise order
 		# and finding the first ID whose predecessor can be found
@@ -166,12 +178,13 @@ def stabilize():
 				print 'New successor is ' + str(new_succ.ID)
 				SUCCESSOR = new_succ
 
-				data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
 				# "fixing the gap" (i.e successor & predecessor of the leaving node fixing their predecessor & successor)
-				# has to be atomic
-				if not notify_result:
-					print 'Failed to notify ' + str(SUCCESSOR.ID)
-					SUCCESSOR = old_succ
+				# has to be atomic BUT NO NEED TO BE ATOMIC IF SUCCESSOR IS YOURSELF
+				if SUCCESSOR.ID != NODE.ID:
+					data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
+					if not notify_result:
+						print 'Failed to notify ' + str(SUCCESSOR.ID)
+						SUCCESSOR = old_succ
 
 				return
 
@@ -185,15 +198,26 @@ def stabilize():
 	# check if successor has a new predecessor in between us & the successor
 	else:
 		# node is our successor's predecessor
-		succ_pred = Node(data["ip"], int(data["id"]))
+		succ_pred = Node(data["ip"], data["id"])
 
-		# if our successor's predecessor is between us
-		invalid = next_ID(NODE.ID) == SUCCESSOR.ID
-		if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
-			print 'New successor is ' + str(succ_pred.ID)
-			SUCCESSOR = succ_pred
+		# ===========================================
+		# If [succ_pred] is NULL, immediately notify [succ]
+		if not null_node(succ_pred):
+			# if our successor's predecessor is between us
+			invalid = next_ID(NODE.ID) == SUCCESSOR.ID
+			if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
+				print 'New successor is ' + str(succ_pred.ID)
+				SUCCESSOR = succ_pred
+		# ===========================================
+
+		# invalid = next_ID(NODE.ID) == SUCCESSOR.ID
+		# if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
+		# 	print 'New successor is ' + str(succ_pred.ID)
+		# 	SUCCESSOR = succ_pred
 
 		# notify successor of our existence
+		if SUCCESSOR.ID == NODE.ID:
+			return
 		data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
 		if not notify_result:
 			print 'Failed to notify ' + str(SUCCESSOR.ID)
@@ -230,11 +254,30 @@ def notify(node):
 		PREDECESSOR = node
 	# print 'PREDECESSOR is ' + str(PREDECESSOR.ID)
 
+# def no_neighbors():
+# 	if len(NEIGHBORS) == 0:
+# 		return True
+#
+# 	for neighbor in NEIGHBORS:
+# 		data, result = make_http_request(neighbor, 'init_status', 'GET', None)
+# 		if result and data["initialized"]:
+# 			return False
+#
+# 	return True
+
+@app.route("/init_status", methods=["GET"])
+def handle_init_status():
+	resp = jsonify({
+		"initialized": INITIALIZED
+	})
+	resp.status_code = 200
+	return resp
 
 @app.route("/join", methods=["POST", "GET"])
 def join():
+	print '[join] Kicked off process to join'
 	# Generate ID for the node.
-	global NODE
+	global NODE, INITIALIZED, SUCCESSOR
 	NODE.IP = socket.gethostbyname(socket.gethostname())
 
 	# Scan the network to look for other active Chord nodes.
@@ -244,13 +287,19 @@ def join():
 	nm.scan(hosts=address, arguments="-p5000")
 	counter = 0
 	for host in nm.all_hosts():
+		if host == NODE.IP:
+			continue
 		# Do not add more than 5 nodes.
 		if (counter > 4):
 			break
 		if nm[host]['tcp'][5000]['state'] == "open":
-			NEIGHBORS.append(host)
-			counter += 1
+			# only add hosts if they are INITIALIZED CHORD NODES, not just online
+			data, result = make_http_request(host, 'init_status', 'GET', None)
+			if result and data["initialized"]:
+				NEIGHBORS.append(host)
+				counter += 1
 
+	print '[join] ' + str(len(NEIGHBORS)) + ' are online'
 	if len(NEIGHBORS) == 0:
 		NODE.ID = genID(False)
 		SUCCESSOR = NODE
@@ -287,7 +336,7 @@ def join():
 	INITIALIZED = True
 	return "Welcome to CHORD"
 
-def makeFingers(succ):
+def makeFingers():
 	for i in range(1, IDBITS + 1):
 		start = (NODE.ID + math.pow(2, i-1)) % math.pow(2, IDBITS)
 		FINGERS[i] = (start, SUCCESSOR)
@@ -590,14 +639,15 @@ def processUFiles(fileNames):
 	return succFiles
 
 
+# STABILIZE TAKES SUPER LONG BECAUSE 10 tries * 5 timeout
 def make_http_request(target, endpoint, method, payload):
 	tries = 0
 	while tries < MAX_RETRIES:
 		try:
 			if method.upper() == 'GET':
-				r = requests.get('http://' + target + ':5000/' + endpoint)
+				r = requests.get('http://' + target + ':5000/' + endpoint, timeout=1)
 			elif method.upper() == 'POST':
-				r = requests.post('http://' + target + ':5000/' + endpoint, json=payload)
+				r = requests.post('http://' + target + ':5000/' + endpoint, json=payload, timeout=1)
 			if r.status_code == 200:
 				return (r.json(), True)
 		except:
