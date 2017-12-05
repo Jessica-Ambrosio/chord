@@ -415,11 +415,12 @@ def search():
 			print "THIS IS THE REQUEST RESPONSE " + str(req.text)
 			if req.status_code == 200:
 				print dir(req)
+				print 'mimetype: ' + str(req.mimetype)
 				print '====req.content===='
 				print req.content
-				file = req.files[fileName]
-				file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
-				NODE.FILES[hashlib.sha1(fileName)] = "downloads"
+				# file = req.files[fileName]
+				# file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
+				# NODE.FILES[hashlib.sha1(fileName)] = "downloads"
 				return "FILE DOWNLOADED AND SHIT"
 			elif req.status_code == 400:
 				return "The request did not arrive correctly."
@@ -588,7 +589,7 @@ def fileRequest():
 	if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], fileName)):
 		with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as f:
 			print "SENT THE FILE"
-			return send_from_directory(app.config['UPLOAD_FOLDER'], fileName)
+			return send_from_directory(app.config['UPLOAD_FOLDER'], fileName, as_attachment=True, attachment_filename=fileName)
 	else:
 		resp = jsonify({})
 		resp.status_code = 404 # File not found.
