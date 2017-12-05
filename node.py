@@ -538,7 +538,7 @@ def recFile():
 			# Send it to successor within the range of the
 			# correct file owner node.
 			sendNode = None
-			for i in xrange(0,IDBITS):
+			for i in xrange(1, IDBITS+1):
 				interval = (FINGERS[i][0], (FINGERS[i][0] + 2**i) % 2**IDBITS)
 				if between(interval[0], interval[1], nodeID):
 					sendNode = FINGERS[i][1]
@@ -628,7 +628,7 @@ def processUFiles(fileNames):
 		print node
 		sendNode = None
 		if node != NODE.ID:
-			for i in xrange(0,IDBITS):
+			for i in xrange(1, IDBITS+1):
 				interval = (FINGERS[i][0], (FINGERS[i][0] + 2**i) % 2**IDBITS)
 				if between(interval[0], interval[1], node):
 					sendNode = FINGERS[i][1]
@@ -657,7 +657,7 @@ def processUFiles(fileNames):
 				except requests.exceptions.RequestException as e:
 					print str(sendNode.ID) + " could not be reached."
 					# Use stabilize
-					run_stabilize()
+					stabilize()
 	return succFiles
 
 
@@ -681,19 +681,6 @@ def make_http_request(target, endpoint, method, payload):
 
 # checks if ID c is (inclusive) between a & b in the Chord ring
 def between(a, b, c):
-	# print "WE ARE BETWEEN"
-	# print "THIS IS a ",
-	# print a,
-	# print " "
-	# print type(a)
-	# print " THIS IS b ",
-	# print b,
-	# print " "
-	# print type(b)
-	# print " THIS is c ",
-	# print c
-	# print " "
-	# print type(c)
 	a, b, c = int(a), int(b), int(c)
 	if b > a:
 		# print "b > a"
