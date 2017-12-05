@@ -13,7 +13,13 @@ import threading
 
 # convert 'raise Exception' to 'print' because don't want Node to crash due to network problems
 
+# The uploads folder will contain all the files
+# that the user has decided to share with other nodes.
+# These files are searchable. 
 UPLOAD_FOLDER = "static/uploads"
+# The downloads folder will contain all the files 
+# that the user has downloaded or received form other nodes. 
+DOWNLOAD_FOLDER = "static/downloads"
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
 
 app = Flask(__name__)
@@ -108,7 +114,7 @@ def find_predecessor(ID):
 
 def find_closest_preceding_finger(ID):
 	# loops from IDBITS to 1
-	for i in range(IDBITS, 0, -1):
+	for i in xrange(IDBITS, 0, -1):
 		ith_finger = FINGERS[i][1]
 		# e.g x = 4, y = 5 or 4, then there does not exist a z that could
 		# be exclusive between 4 & 5
@@ -261,6 +267,7 @@ def exist():
 	# Check if the request is correctly made.
 	# and send an error otherwise.
 	recID = request.form['id']
+	# Use fingre function to figure this out. 
 	print "THIS IS THE RECEIVED ID " + str(recID)
 	return "NO"
 
@@ -277,17 +284,36 @@ def allowed_file(filename):
 
 @app.route("/searchFile", methods=["POST"])
 def search():
+	if "fileName" not in request.form:
+		resp = jsonify({})
+		resp.status_code = 404
+		return resp
 	fileName = request.form.get("fileName", None)
-	# Hash the name of the file.
-	# Check if we already have the file on the uploads folder
-	# or in the downloads folder.
-	# 	if we already have it, return its location
-	# else
-	# 	Determine which node should have the file.
-	# 	Use the finger table to get to that node.
-	# Once you get the file, hash it, and save it in the
-	# file dictionary.
-	return "FILE"
+	if not fileName:
+		return "No file name typed."
+	hashFile = hashlib.sha1(fileName)
+	if hashFile in NODE.FILES:
+		return "You already have this file and it's in downloads or uploads. LOL"
+	else:
+		node = chord(fileName)
+		successor = find_successor(node)
+		try:
+			req = requests.post(address, data={'fileName':fileName,}, timeout=15)
+			if req.status_code == 200:
+				file = request.files[fileName]
+				file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
+				NODE.FILES[hashlib.sha1(fileName)] = "downloads"
+				return "FILE DOWNLOADED AND SHIT"
+			elif req.status_code == 400:
+				return "The request did not arrive correctly."
+			elif req.status_code == 404:
+				return "The file does not exist in the system"
+			# Use the status code to determine the output in jinja. 
+		except requests.exceptions.RequestException as e:
+			print e
+			run_stabilize():
+			return "COULD NOT DOWNLOAD THE FILE" # We need to do something if this fails
+
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -387,7 +413,7 @@ def recFile():
 			# Send it to successor within the range of the
 			# correct file owner node.
 			sendNode = None
-			for i in range(0,3):
+			for i in xrange(0,IDBITS):
 				interval = (FINGERS[i][0], (FINGERS[i][0] + 2**i) % 2**IDBITS)
 				if between(interval[0], interval[1], nodeID):
 					sendNode = FINGERS[i][1]
@@ -407,19 +433,35 @@ def recFile():
 				except requests.exceptions.RequestException as e:
 					print e
 					# Call stabilize to update the finger tables.
+					run_stabilize():
 					return "FAILURE" # We need to do something if this fails.
 		# else:
 		# 	print "WE ARE THE SUCCESSOR OF THE GOAL NODE"
 	if keepFile:
 		file = request.files[fileName]
-		file.save(os.path.join(".", file.filename))
+		file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
+		NODE.FILES[hashlib.sha1(fileName)] = "downloads"
 		return "SUCCESS"
+
+@app.route("/fileRequest", methods=["POST"])
+def fileRequest():
+	# Check that the request is valid. 
+	if "fileName" not in request.form:
+		resp = jsonify({})
+		resp.status_code = 400 # Bad request
+		return resp
+	# Check if we actually have the file. 
+	if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], fileName)):
+		with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as f:
+			return send_from_directory(app.config['UPLOAD_FOLDER'], fileName)
+	else:
+		resp = jsonify({})
+		resp.status_code = 404 # File not found. 
+		return resp
 
 # addRandom -> boolean
 # Use addRandom = True whenever you need to generate
 # a new ID if the one generated first was already taken.
-
-# Fire stabilize, fix_fingers periodically; Fixing bugs (stabilize is still broken)
 def genID(addRandom):
     hostname = socket.gethostname()
     IP = socket.gethostbyname(hostname)
@@ -459,7 +501,7 @@ def processUFiles(fileNames):
 		print node
 		sendNode = None
 		if node != NODE.ID:
-			for i in range(0,3):
+			for i in xrange(0,IDBITS):
 				interval = (FINGERS[i][0], (FINGERS[i][0] + 2**i) % 2**IDBITS)
 				if between(interval[0], interval[1], node):
 					sendNode = FINGERS[i][1]
@@ -488,6 +530,7 @@ def processUFiles(fileNames):
 				except requests.exceptions.RequestException as e:
 					print str(sendNode.ID) + " could not be reached."
 					# Use stabilize
+					run_stabilize():
 	return succFiles
 
 
@@ -528,7 +571,7 @@ def prev_ID(ID):
 def circular_range(start):
 	l = []
 	ring_size = int(math.pow(2, IDBITS))
-	for i in range(1, ring_size):
+	for i in xrange(1, ring_size):
 		l.append((start + i) % ring_size)
 	return l
 
@@ -587,7 +630,7 @@ if __name__ == "__main__":
 			NODE = Node(sys.argv[3],int(sys.argv[2]))
 				
 		if NODE.ID == 3 and sys.argv[3] == 'search':
-			for i in range(0, 8):
+			for i in xrange(0, 8):
 				node = find_successor(i)
 				print 'File w/ key' + str(i) + ' is in ' + str(node.ID)
 
