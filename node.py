@@ -588,19 +588,19 @@ def fileRequest():
 # Use addRandom = True whenever you need to generate
 # a new ID if the one generated first was already taken.
 def genID(addRandom):
-	return int(sys.argv[1])
-	#
-    # hostname = socket.gethostname()
-    # IP = socket.gethostbyname(hostname)
-    # hashIP = hashlib.sha1(IP)
-    # hexString = str(int(hashIP.hexdigest(), 16))
-    # decimal = 0
-    # for index,char in enumerate(hexString):
-    #     decimal += int (char) * 16 ** index
-    # if (addRandom):
-    #     decimal += random.randint(1, (2**IDBITS))
-    # ID = decimal % (2 ** 3)
-    # return ID
+	# return int(sys.argv[1])
+
+    hostname = socket.gethostname()
+    IP = socket.gethostbyname(hostname)
+    hashIP = hashlib.sha1(IP)
+    hexString = str(int(hashIP.hexdigest(), 16))
+    decimal = 0
+    for index,char in enumerate(hexString):
+        decimal += int (char) * 16 ** index
+    if (addRandom):
+        decimal += random.randint(1, (2**IDBITS))
+    ID = decimal % (2 ** 3)
+    return ID
 
 # This function maps a file to a node.
 def chord(filename):
