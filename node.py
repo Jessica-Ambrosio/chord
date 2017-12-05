@@ -577,6 +577,7 @@ def fileRequest():
 		resp = jsonify({})
 		resp.status_code = 400 # Bad request
 		return resp
+	fileName = request.form["fileName"]
 	# Check if we actually have the file.
 	if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], fileName)):
 		with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as f:
