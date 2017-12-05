@@ -101,7 +101,7 @@ def find_predecessor(ID):
 			succ = Node(data["ip"], int(data["id"]))
 
 		# check if [node] is [ID]'s predecessor
-		print '(find_predecessor): check if ' + str(ID) + ' is between ' +  str(next_ID(node.ID)) + ' and ' + str(succ.ID)
+		# print '(find_predecessor): check if ' + str(ID) + ' is between ' +  str(next_ID(node.ID)) + ' and ' + str(succ.ID)
 		if between(next_ID(node.ID), succ.ID, ID):
 			# print str(ID) + ' is between ' + str(node.ID + 1) + ' and ' + str(succ.ID)
 			found = True
@@ -128,7 +128,7 @@ def find_closest_preceding_finger(ID):
 		# e.g x = 4, y = 5 or 4, then there does not exist a z that could
 		# be exclusive between 4 & 5
 		invalid = next_ID(NODE.ID) == ID
-		print '[find_closest_preceding_finger] Is finger ' + str(i) + ': ' + str(ith_finger.ID) + ' between ' + str(next_ID(NODE.ID)) + ' and ' + str(prev_ID(ID))
+		# print '[find_closest_preceding_finger] Is finger ' + str(i) + ': ' + str(ith_finger.ID) + ' between ' + str(next_ID(NODE.ID)) + ' and ' + str(prev_ID(ID))
 		if not invalid and between(next_ID(NODE.ID), prev_ID(ID), ith_finger.ID):
 			return ith_finger
 	return NODE
@@ -137,11 +137,11 @@ def find_closest_preceding_finger(ID):
 def fix_fingers():
 	global FINGERS
 	idx = random.randint(1, IDBITS)
-	print 'Check if finger ' + str(idx) + ' needs to be fixed'
+	# print 'Check if finger ' + str(idx) + ' needs to be fixed'
 	new_succ = find_successor(FINGERS[idx][0])
 	if not null_node(new_succ):
 		start = FINGERS[idx][0]
-		print 'Finger ' + str(idx) + ' is now Node ' + str(new_succ.ID)
+		# print 'Finger ' + str(idx) + ' is now Node ' + str(new_succ.ID)
 		FINGERS[idx] = (start, new_succ)
 
 def run_fix_fingers():
@@ -183,7 +183,7 @@ def stabilize():
 
 		for ID in circular_range(SUCCESSOR.ID):
 			old_succ = SUCCESSOR
-			print 'calling [find_predecessor] from stabilize'
+			# print 'calling [find_predecessor] from stabilize'
 			new_succ = find_predecessor(ID)
 			if not null_node(new_succ):
 				found_new_succ = True
@@ -406,11 +406,13 @@ def search():
 	if hashFile in NODE.FILES:
 		return "You already have this file and it's in downloads or uploads. LOL"
 	else:
+		print "we don't have the file"
 		node = chord(fileName)
 		successor = find_successor(node)
 		address = "http://" + successor.IP + ":5000/fileRequest"
 		try:
 			req = requests.post(address, data={'fileName':fileName,}, timeout=15)
+			print "THIS IS THE REQUEST RESPONSE " + str(req.text)
 			if req.status_code == 200:
 				file = request.files[fileName]
 				file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
@@ -574,6 +576,7 @@ def recFile():
 def fileRequest():
 	# Check that the request is valid.
 	if "fileName" not in request.form:
+		print "SENT A 400 REQUEST FOR FILEREQUEST"
 		resp = jsonify({})
 		resp.status_code = 400 # Bad request
 		return resp
@@ -581,10 +584,12 @@ def fileRequest():
 	# Check if we actually have the file.
 	if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], fileName)):
 		with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as f:
+			print "SENT THE FILE"
 			return send_from_directory(app.config['UPLOAD_FOLDER'], fileName)
 	else:
 		resp = jsonify({})
 		resp.status_code = 404 # File not found.
+		print "SENT A 404 RESPONSE"
 		return resp
 
 # addRandom -> boolean
