@@ -352,7 +352,7 @@ def search():
 			# Use the status code to determine the output in jinja.
 		except requests.exceptions.RequestException as e:
 			print e
-			run_stabilize():
+			run_stabilize()
 			return "COULD NOT DOWNLOAD THE FILE" # We need to do something if this fails
 
 
@@ -489,7 +489,7 @@ def recFile():
 				except requests.exceptions.RequestException as e:
 					print e
 					# Call stabilize to update the finger tables.
-					run_stabilize():
+					run_stabilize()
 					return "FAILURE" # We need to do something if this fails.
 		# else:
 		# 	print "WE ARE THE SUCCESSOR OF THE GOAL NODE"
@@ -586,7 +586,7 @@ def processUFiles(fileNames):
 				except requests.exceptions.RequestException as e:
 					print str(sendNode.ID) + " could not be reached."
 					# Use stabilize
-					run_stabilize():
+					run_stabilize()
 	return succFiles
 
 
@@ -693,13 +693,13 @@ if __name__ == "__main__":
 		if sys.argv[3] == 'join':
 			print_finger_table('Finger table on joining')
 
-			# schedule [stabilize] and [fix_fingers] to run periodically
-			t1 = threading.Thread(target=run_stabilize)
-			t1.daemon = True
-			t1.start()
+	# schedule [stabilize] and [fix_fingers] to run periodically
+	t1 = threading.Thread(target=run_stabilize)
+	t1.daemon = True
+	t1.start()
 
-			t2 = threading.Thread(target=run_fix_fingers)
-			t2.daemon = True
-			t2.start()
+	t2 = threading.Thread(target=run_fix_fingers)
+	t2.daemon = True
+	t2.start()
 	# app.debug = True
 	app.run(host="0.0.0.0", port=5000)
