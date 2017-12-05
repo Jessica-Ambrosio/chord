@@ -64,6 +64,7 @@ INITIALIZED = False
 # Find the successor node of an ID on the Chord ring
 def find_successor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_successor): finding successor of ' + str(ID)
+	print 'calling [find_predecessor] from [find_successor]'
 	node = find_predecessor(ID)
 	if null_node(node):
 		return Node(None, None)
@@ -104,6 +105,9 @@ def find_predecessor(ID):
 			# print str(ID) + ' is between ' + str(node.ID + 1) + ' and ' + str(succ.ID)
 			found = True
 		else:
+			# if next_ID(node.ID) == 2 and succ.ID == 2 and ID == 5:
+			# 	raise Exception('ABORT!')
+
 			if node == NODE:
 				node = find_closest_preceding_finger(ID)
 			else:
@@ -123,6 +127,7 @@ def find_closest_preceding_finger(ID):
 		# e.g x = 4, y = 5 or 4, then there does not exist a z that could
 		# be exclusive between 4 & 5
 		invalid = next_ID(NODE.ID) == ID
+		print '[find_closest_preceding_finger] Is finger ' + str(i) + ': ' + str(ith_finger.ID) + ' between ' + str(next_ID(NODE.ID)) + ' and ' + str(prev_ID(ID))
 		if not invalid and between(next_ID(NODE.ID), prev_ID(ID), ith_finger.ID):
 			return ith_finger
 	return NODE
@@ -150,8 +155,13 @@ def run_fix_fingers():
 		print_finger_table('After [fix_fingers]')
 		print_succ_pred()
 
+def node_exists(node):
+	data, result = make_http_request(node.IP, 'ping', 'GET', None)
+	print '[node_exists/ping] node ' + str(node.ID) + ' exists: ' + str(result)
+	return result
+
 def stabilize():
-	global SUCCESSOR
+	global SUCCESSOR, PREDECESSOR
 
 	# node is 1st node in network
 	if SUCCESSOR.ID == NODE.ID:
@@ -172,11 +182,14 @@ def stabilize():
 
 		for ID in circular_range(SUCCESSOR.ID):
 			old_succ = SUCCESSOR
+			print 'calling [find_predecessor] from stabilize'
 			new_succ = find_predecessor(ID)
 			if not null_node(new_succ):
 				found_new_succ = True
-				print 'New successor is ' + str(new_succ.ID)
-				SUCCESSOR = new_succ
+				if node_exists(new_succ):
+					print 'New successor is ' + str(new_succ.ID)
+					SUCCESSOR = new_succ
+					FINGERS[1] = (FINGERS[1][0], SUCCESSOR)
 
 				# "fixing the gap" (i.e successor & predecessor of the leaving node fixing their predecessor & successor)
 				# has to be atomic BUT NO NEED TO BE ATOMIC IF SUCCESSOR IS YOURSELF
@@ -185,6 +198,7 @@ def stabilize():
 					if not notify_result:
 						print 'Failed to notify ' + str(SUCCESSOR.ID)
 						SUCCESSOR = old_succ
+						FINGERS[1] = (FINGERS[1][0], SUCCESSOR)
 
 				return
 
@@ -206,8 +220,10 @@ def stabilize():
 			# if our successor's predecessor is between us
 			invalid = next_ID(NODE.ID) == SUCCESSOR.ID
 			if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
-				print 'New successor is ' + str(succ_pred.ID)
-				SUCCESSOR = succ_pred
+				if node_exists(succ_pred):
+					print 'New successor is ' + str(succ_pred.ID)
+					SUCCESSOR = succ_pred
+					FINGERS[1] = (FINGERS[1][0], SUCCESSOR)
 		# ===========================================
 
 		# invalid = next_ID(NODE.ID) == SUCCESSOR.ID
@@ -217,10 +233,11 @@ def stabilize():
 
 		# notify successor of our existence
 		if SUCCESSOR.ID == NODE.ID:
-			return
-		data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
-		if not notify_result:
-			print 'Failed to notify ' + str(SUCCESSOR.ID)
+			PREDECESSOR = NODE
+		else:
+			data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
+			if not notify_result:
+				print 'Failed to notify ' + str(SUCCESSOR.ID)
 
 	# print 'Successor is ' + str(SUCCESSOR.ID)
 
@@ -244,6 +261,8 @@ def notify(node):
 		PREDECESSOR = node
 
 	data, result = make_http_request(PREDECESSOR.IP, 'ping','GET', None)
+	print '[node_exists/ping] node ' + str(node.ID) + ' exists: ' + str(result)
+
 	if not result:
 		print 'New predecessor is ' + str(node.ID)
 		PREDECESSOR = node
@@ -277,7 +296,8 @@ def handle_init_status():
 def join():
 	print '[join] Kicked off process to join'
 	# Generate ID for the node.
-	global NODE, INITIALIZED, SUCCESSOR
+	global NODE, INITIALIZED, SUCCESSOR, NEIGHBORS
+	NEIGHBORS = []
 	NODE.IP = socket.gethostbyname(socket.gethostname())
 
 	# Scan the network to look for other active Chord nodes.
@@ -358,14 +378,14 @@ def leave():
 	# make_http_request(SUCCESSOR.ID, 'leave_notice', 'POST', {'node_leaving': 'PREDECESSOR', 'ip': PREDECESSOR.IP, 'id': PREDECESSOR.ID})
 	return "<h1>You have successfully exited chord.</h1>"
 
-@app.route("/leave_notice", methods=["POST"])
-def handle_leave_notice():
-	data = request.get_json()
-	IP, ID, node_leaving = data["ip"], data["id"], data["node_leaving"]
-	if node_leaving.upper() == 'SUCCESSOR':
-		SUCCESSOR = Node(IP, ID)
-	elif node_leaving.upper() == 'PREDECESSOR':
-		PREDECESSOR = Node(IP, ID)
+# @app.route("/leave_notice", methods=["POST"])
+# def handle_leave_notice():
+# 	data = request.get_json()
+# 	IP, ID, node_leaving = data["ip"], data["id"], data["node_leaving"]
+# 	if node_leaving.upper() == 'SUCCESSOR':
+# 		SUCCESSOR = Node(IP, ID)
+# 	elif node_leaving.upper() == 'PREDECESSOR':
+# 		PREDECESSOR = Node(IP, ID)
 
 # Function to verify that the file looked up/ downloaded
 # has one of the allowed extensions.
@@ -568,17 +588,19 @@ def fileRequest():
 # Use addRandom = True whenever you need to generate
 # a new ID if the one generated first was already taken.
 def genID(addRandom):
-    hostname = socket.gethostname()
-    IP = socket.gethostbyname(hostname)
-    hashIP = hashlib.sha1(IP)
-    hexString = str(int(hashIP.hexdigest(), 16))
-    decimal = 0
-    for index,char in enumerate(hexString):
-        decimal += int (char) * 16 ** index
-    if (addRandom):
-        decimal += random.randint(1, (2**IDBITS))
-    ID = decimal % (2 ** 3)
-    return ID
+	return int(sys.argv[1])
+	#
+    # hostname = socket.gethostname()
+    # IP = socket.gethostbyname(hostname)
+    # hashIP = hashlib.sha1(IP)
+    # hexString = str(int(hashIP.hexdigest(), 16))
+    # decimal = 0
+    # for index,char in enumerate(hexString):
+    #     decimal += int (char) * 16 ** index
+    # if (addRandom):
+    #     decimal += random.randint(1, (2**IDBITS))
+    # ID = decimal % (2 ** 3)
+    # return ID
 
 # This function maps a file to a node.
 def chord(filename):
@@ -659,11 +681,31 @@ def make_http_request(target, endpoint, method, payload):
 
 # checks if ID c is (inclusive) between a & b in the Chord ring
 def between(a, b, c):
+	# print "WE ARE BETWEEN"
+	# print "THIS IS a ",
+	# print a,
+	# print " "
+	# print type(a)
+	# print " THIS IS b ",
+	# print b,
+	# print " "
+	# print type(b)
+	# print " THIS is c ",
+	# print c
+	# print " "
+	# print type(c)
+	a, b, c = int(a), int(b), int(c)
 	if b > a:
+		# print "b > a"
+		# print (a <= c and c <= b)
 		return a <= c and c <= b
 	elif a > b:
+		# print "a > b"
+		# print (c >= a or c <= b)
 		return c >= a or c <= b
 	else:
+		# print "last case"
+		# print (a == c)
 		return a == c
 
 # return next ID on the Chord ring
@@ -677,7 +719,8 @@ def prev_ID(ID):
 def circular_range(start):
 	l = []
 	ring_size = int(math.pow(2, IDBITS))
-	for i in xrange(1, ring_size):
+	# WE CHANGED THIS FROM ring_size TO ring_size + 1
+	for i in xrange(1, ring_size + 1):
 		l.append((start + i) % ring_size)
 	return l
 
@@ -711,37 +754,38 @@ def print_succ_pred(msg=''):
 # 		print FINGERS
 
 if __name__ == "__main__":
-	if len(sys.argv) > 1:
-		if sys.argv[1] == 'demo':
-			assigned_node = False
-			with open('state' + sys.argv[2] + '.csv', 'rb') as f:
-				reader = csv.reader(f)
-				arg_list = list(reader)
-				for idx, arg in enumerate(arg_list):
-					# NOTE: IP comes before ID in Node initialization
-					if len(arg) == 3:
-						start, ID, IP = arg
-						FINGERS[idx + 1] = (int(start), Node(IP.strip(), int(ID)))
-					elif len(arg) == 2:
-						if not assigned_node:
-							ID, IP = arg
-							NODE = Node(IP.strip(), int(ID))
-							assigned_node = True
-						else:
-							ID, IP = arg
-							PREDECESSOR = Node(IP.strip(), int(ID))
 
-				SUCCESSOR = (FINGERS[1])[1]
-		elif sys.argv[1] == 'test':
-			NODE = Node(sys.argv[3],int(sys.argv[2]))
-
-		if NODE.ID == 3 and sys.argv[3] == 'search':
-			for i in xrange(0, 8):
-				node = find_successor(i)
-				print 'File w/ key' + str(i) + ' is in ' + str(node.ID)
-
-		if sys.argv[3] == 'join':
-			print_finger_table('Finger table on joining')
+	# if len(sys.argv) > 1:
+	# 	if sys.argv[1] == 'demo':
+	# 		assigned_node = False
+	# 		with open('state' + sys.argv[2] + '.csv', 'rb') as f:
+	# 			reader = csv.reader(f)
+	# 			arg_list = list(reader)
+	# 			for idx, arg in enumerate(arg_list):
+	# 				# NOTE: IP comes before ID in Node initialization
+	# 				if len(arg) == 3:
+	# 					start, ID, IP = arg
+	# 					FINGERS[idx + 1] = (int(start), Node(IP.strip(), int(ID)))
+	# 				elif len(arg) == 2:
+	# 					if not assigned_node:
+	# 						ID, IP = arg
+	# 						NODE = Node(IP.strip(), int(ID))
+	# 						assigned_node = True
+	# 					else:
+	# 						ID, IP = arg
+	# 						PREDECESSOR = Node(IP.strip(), int(ID))
+	#
+	# 			SUCCESSOR = (FINGERS[1])[1]
+	# 	elif sys.argv[1] == 'test':
+	# 		NODE = Node(sys.argv[3],int(sys.argv[2]))
+	#
+	# 	if NODE.ID == 3 and sys.argv[3] == 'search':
+	# 		for i in xrange(0, 8):
+	# 			node = find_successor(i)
+	# 			print 'File w/ key' + str(i) + ' is in ' + str(node.ID)
+	#
+	# 	if sys.argv[3] == 'join':
+	# 		print_finger_table('Finger table on joining')
 
 	# schedule [stabilize] and [fix_fingers] to run periodically
 	t1 = threading.Thread(target=run_stabilize)
