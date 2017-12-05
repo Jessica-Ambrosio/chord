@@ -4,33 +4,20 @@
 <!-- Main -->
 	<div id="main">
 		<div class="inner">
-<<<<<<< HEAD
 			{% if successFiles|length > 0  %}
-=======
-			{% if successFiles is not none %}
->>>>>>> changes
 			<h3>Successfully uploaded the following file(s):</h3>
 				<ul>
 					{% for success in successFiles %}
 						<li>{{ success }}</li>
 					{% endfor %}
-<<<<<<< HEAD
 					<p>If there are files missing, try uploading them later.</p>
 				</ul>
 			{% elif failure == true %}
 				<h3>Chord could not upload any of the files. <br>This the only node in the system.</h3>
-=======
-				</ul>
->>>>>>> changes
 			{% else %}
 				<h3>No files chosen.</h3>
 			{% endif %}
 		</div>
 	</div>
 <!-- End of Main -->
-
-<<<<<<< HEAD
 {% endblock %}
-=======
-{% endblock %}
->>>>>>> changes

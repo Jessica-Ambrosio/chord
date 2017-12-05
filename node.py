@@ -218,7 +218,7 @@ def stabilize():
 		# If [succ_pred] is NULL, immediately notify [succ]
 		if not null_node(succ_pred):
 			# if our successor's predecessor is between us
-			invalid = next_ID(NODE.ID) == SUCCESSOR.ID
+	 		invalid = next_ID(NODE.ID) == SUCCESSOR.ID
 			if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
 				if node_exists(succ_pred):
 					print 'New successor is ' + str(succ_pred.ID)
