@@ -15,10 +15,10 @@ import threading
 
 # The uploads folder will contain all the files
 # that the user has decided to share with other nodes.
-# These files are searchable. 
+# These files are searchable.
 UPLOAD_FOLDER = "static/uploads"
-# The downloads folder will contain all the files 
-# that the user has downloaded or received form other nodes. 
+# The downloads folder will contain all the files
+# that the user has downloaded or received form other nodes.
 DOWNLOAD_FOLDER = "static/downloads"
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg'])
 
@@ -54,6 +54,7 @@ PREDECESSOR = Node(None, None)
 # key: i (for ith finger), value: (start, Node node)
 FINGERS = dict()
 MAX_RETRIES = 5
+INITIALIZED = False
 # successor_list = []
 
 # CORE
@@ -95,7 +96,7 @@ def find_predecessor(ID):
 			succ = Node(data["ip"], int(data["id"]))
 
 		# check if [node] is [ID]'s predecessor
-		# print '(find_predecessor): successor of node ' + str(node.ID) + ' is ' + str(succ.ID)
+		print '(find_predecessor): check if ' + str(ID) + ' is between ' +  str(next_ID(node.ID)) + ' and ' + str(succ.ID)
 		if between(next_ID(node.ID), succ.ID, ID):
 			# print str(ID) + ' is between ' + str(node.ID + 1) + ' and ' + str(succ.ID)
 			found = True
@@ -136,13 +137,15 @@ def fix_fingers():
 
 def run_fix_fingers():
 	while True:
+		time.sleep(10)
+		if not INITIALIZED:
+			continue
 		# print_finger_table('Before fix_fingers')
 		print '============[fix_fingers]=============='
 		fix_fingers()
 		print '======================================='
 		print_finger_table('After [fix_fingers]')
 		print_succ_pred()
-		time.sleep(10)
 
 def stabilize():
 	global SUCCESSOR
@@ -199,12 +202,14 @@ def stabilize():
 
 def run_stabilize():
 	while True:
+		time.sleep(10)
+		if not INITIALIZED:
+			continue
 		# print_finger_table('Before stabilize')
 		print '============[stabilize]=============='
 		stabilize()
 		print '====================================='
 		# print_finger_table('After stabilize')
-		time.sleep(10)
 
 def notify(node):
 	global PREDECESSOR
@@ -230,7 +235,8 @@ def notify(node):
 def join():
 	# Generate ID for the node.
 	global NODE
-	NODE.ID = genID(False)
+	NODE.IP = socket.gethostbyname(socket.gethostname())
+
 	# Scan the network to look for other active Chord nodes.
 	nm = nmap.PortScanner()
 	# We are assuming the protocol used is IPv4
@@ -244,62 +250,53 @@ def join():
 		if nm[host]['tcp'][5000]['state'] == "open":
 			NEIGHBORS.append(host)
 			counter += 1
-	if len(NEIGHBORS) > 0:
-		idTaken = False
-		for neighbor in NEIGHBORS:
-			try:
-				r = ""
-				r = requests.post("http://" + neighbor + ":5000/exist",
-										 data={'id':NODE.ID}, timeout=5)
-				if (not (r == "")):
-					#print "the request is not empty"
-					# print r.text 	   # For debugging purposes.
-					if r.text == "YES": # The node already exists.
-						idTaken = True
-						break;
-			except requests.exceptions.RequestException as e:
-				print e
-		if (idTaken):
-			# changeID()
-			#print "THE ID IS TAKEN"
-			return "Generate a new ID"
-		else:
-			# makeFingers() # Make the finger table! :D
-			#print "WELCOME TO CHORD"
-			print "OUR ID IS " + NODE.ID
-			return "Welcome to CHORD"
-	else:
+
+	if len(NEIGHBORS) == 0:
+		NODE.ID = genID(False)
+		SUCCESSOR = NODE
+		makeFingers() # Make the finger table! :D
+		INITIALIZED = True
 		return "<h1>You are the only chord node in the network</h1>"
 
-def makeFingers():
-	for neighbor in NEIGHBORS:
-		data, result = make_http_request(neighbor, 'successor', 'POST', {'id': NODE.ID})
-		if result:
-			SUCCESSOR = Node(data["ip"], data["id"])
-			for i in range(1, IDBITS + 1):
-				start = (NODE.ID + math.pow(2, i-1)) % math.pow(2, IDBITS)
-				FINGERS[i] = (start, SUCCESSOR)
-		else:
-			raise Exception('FAILED TO SETUP FINGER TABLE. ABORT!')
+	idTaken = True
+	tries = 0
+	NODE.ID = genID(False)
 
-# =============== NEED TO DISCUSS =========================
-# Returns "YES" if the ID has already been taken
-# and "NO" otherwise.
-@app.route("/exist", methods=["POST"])
-def exist():
-	# Check if the request is correctly made.
-	# and send an error otherwise.
-	recID = request.form['id']
-	# Use fingre function to figure this out. 
-	print "THIS IS THE RECEIVED ID " + str(recID)
-	return "NO"
+	while idTaken and tries < 10:
+		for neighbor in NEIGHBORS:
+			data, result = make_http_request(neighbor, 'successor', 'POST', {'id': NODE.ID})
+			# if neighbor tells us successor of ID = Node.ID is not ID then there is no node
+			# w/ ID = Node.ID and we can take the ID for ourselves
+			if result:
+				if data["id"] != NODE.ID:
+					idTaken = False
+				break
+
+		if idTaken:
+			# try a new ID
+			NODE.ID = genID(True)
+			tries += 1
+
+	# if we pick [IDBITS] such that math.pow(2, [IDBITS]) > #(Zoo machines), then if [idTaken]
+	# is still true at this point, neighbors all failed in setting up our ID
+	if idTaken:
+		return "<h1>Failed to join! Please try to join again in a bit.</h1>"
+
+	SUCCESSOR = Node(data["ip"], data["id"])
+	makeFingers() # Make the finger table! :D
+	INITIALIZED = True
+	return "Welcome to CHORD"
+
+def makeFingers(succ):
+	for i in range(1, IDBITS + 1):
+		start = (NODE.ID + math.pow(2, i-1)) % math.pow(2, IDBITS)
+		FINGERS[i] = (start, SUCCESSOR)
 
 @app.route("/ping", methods=["GET"])
 def ping():
 	resp = jsonify({})
 	resp.status_code = 200
 	return resp
-# =========================================================
 
 @app.route("/leave", methods=["POST"])
 def leave():
@@ -352,7 +349,7 @@ def search():
 				return "The request did not arrive correctly."
 			elif req.status_code == 404:
 				return "The file does not exist in the system"
-			# Use the status code to determine the output in jinja. 
+			# Use the status code to determine the output in jinja.
 		except requests.exceptions.RequestException as e:
 			print e
 			run_stabilize():
@@ -504,18 +501,18 @@ def recFile():
 
 @app.route("/fileRequest", methods=["POST"])
 def fileRequest():
-	# Check that the request is valid. 
+	# Check that the request is valid.
 	if "fileName" not in request.form:
 		resp = jsonify({})
 		resp.status_code = 400 # Bad request
 		return resp
-	# Check if we actually have the file. 
+	# Check if we actually have the file.
 	if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], fileName)):
 		with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as f:
 			return send_from_directory(app.config['UPLOAD_FOLDER'], fileName)
 	else:
 		resp = jsonify({})
-		resp.status_code = 404 # File not found. 
+		resp.status_code = 404 # File not found.
 		return resp
 
 # addRandom -> boolean
