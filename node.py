@@ -659,6 +659,8 @@ def processUFiles(fileNames):
 					print str(sendNode.ID) + " could not be reached."
 					# Use stabilize
 					stabilize()
+		else:
+			succFiles.append(fileName)
 	return succFiles
 
 
