@@ -411,18 +411,20 @@ def search():
 		successor = find_successor(node)
 		address = "http://" + successor.IP + ":5000/fileRequest"
 		try:
-			req = requests.post(address, data={'fileName':fileName,}, timeout=15)
+			req = requests.post(address, data={'fileName':fileName,'originID':NODE.ID, 'originIP':NODE.IP}, timeout=40)
 			print "THIS IS THE REQUEST RESPONSE " + str(req.text)
 			if req.status_code == 200:
 				# print dir(req)
 				# file = req.files[fileName]
 				# file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
 				# NODE.FILES[hashlib.sha1(fileName)] = "downloads"
-				return "FILE DOWNLOADED AND SHIT"
+				return "File exists and will be downloaded soon."
 			elif req.status_code == 400:
 				return "The request did not arrive correctly."
 			elif req.status_code == 404:
 				return "The file does not exist in the system"
+			else:
+				return "File could not be received correctly. Try again later."
 			# Use the status code to determine the output in jinja.
 		except requests.exceptions.RequestException as e:
 			print e
@@ -529,7 +531,9 @@ def recFile():
 	assert "nodeID" in request.form
 	assert "fileName" in request.form
  	# Check if this is correct.
+	print "WE ARE IN RECEIVE FILE"
 	nodeID = int(request.form["nodeID"]) # File destination
+	print "the ultimate destination of the file is " + str(nodeID)
 	fileName = request.form["fileName"]
 	sender = int(request.form["sender"])
 	keepFile = True
@@ -575,23 +579,52 @@ def recFile():
 
 @app.route("/fileRequest", methods=["POST"])
 def fileRequest():
+	resp = jsonify({})
 	# Check that the request is valid.
 	if "fileName" not in request.form:
-		print "SENT A 400 REQUEST FOR FILEREQUEST"
-		resp = jsonify({})
+		print "SENT A 400 RESPONE FOR FILEREQUEST"
 		resp.status_code = 400 # Bad request
 		return resp
 	fileName = request.form["fileName"]
 	# Check if we actually have the file.
 	if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], fileName)):
-		with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as f:
-			print "SENT THE FILE"
-			return send_from_directory(app.config['UPLOAD_FOLDER'], fileName, as_attachment=True, attachment_filename=fileName)
+		originIP = request.form['originIP']
+		originID = request.form['originID']
+		response = sendFile(fileName, originID, originIP)
+		if response == "SUCCESS":
+			print "/fileRequest: sending a 200 response"
+			resp.status_code = 200
+		else:
+			print "/fileRequest sending a 598 response"
+			resp.status_code = 598    # Network read timeout error.
+		return resp
 	else:
 		resp = jsonify({})
 		resp.status_code = 404 # File not found.
 		print "SENT A 404 RESPONSE"
 		return resp
+
+def sendFile(fileName, originID, originIP):
+	address = "http://" + originIP + ":5000/receiveFile"
+	with open(os.path.join(app.config['UPLOAD_FOLDER'], fileName), 'r') as file:
+		try:
+			req = requests.post(address, data={'nodeID':originID, 'fileName':fileName,
+					'sender':str(NODE.ID)}, files={fileName: file}, timeout=15)
+			print "WE ARE IN sendFile"
+			print "The response was ",
+			print req
+			print "req.txt is ",
+			print req.text
+			if req.text == "SUCCESS":
+				print "node " + str(originID) + " successfully received the file."
+				return "SUCCESS"
+			else:
+				print "node " + str(originID) + " could not received the file."
+				return "FAILURE"
+		except requests.exceptions.RequestException as e:
+			print e
+			print "we could not connect to node " + str(originID)
+			return "FAILURE"
 
 # addRandom -> boolean
 # Use addRandom = True whenever you need to generate
