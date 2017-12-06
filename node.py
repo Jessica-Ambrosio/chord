@@ -402,8 +402,7 @@ def search():
 	fileName = request.form.get("fileName", None)
 	if not fileName:
 		return "No file name typed."
-	hashFile = hashlib.sha1(fileName)
-	if hashFile in NODE.FILES:
+	if fileName in NODE.FILES:
 		return "You already have this file and it's in downloads or uploads. LOL"
 	else:
 		print "we don't have the file"
@@ -574,7 +573,7 @@ def recFile():
 	if keepFile:
 		file = request.files[fileName]
 		file.save(os.path.join(app.config['DOWNLOAD_FOLDER'], fileName))
-		NODE.FILES[hashlib.sha1(fileName)] = "downloads"
+		NODE.FILES[fileName] = "downloads"
 		return "SUCCESS"
 
 @app.route("/fileRequest", methods=["POST"])
@@ -661,7 +660,7 @@ def processUFiles(fileNames):
 		# To provide redundancy, keep a copy of the file and its key.
 		# This will make lookup a bit faster, and if the node leaves,
 		# someone will still have the file.
-		NODE.FILES[hashlib.sha1(fileName)] = "uploads"
+		NODE.FILES[fileName] = "uploads"
 		# Find where the file should be sent to.
 		node = chord(fileName)
 		print "CHORD HAS ASSIGNED THE FILE TO NODE: ",
