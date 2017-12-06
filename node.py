@@ -562,7 +562,7 @@ def recFile():
 						print req.text
 						return "FAILURE"
 					print req.text
-					return "SUCESS"
+					return "SUCCESS"
 				except requests.exceptions.RequestException as e:
 					print e
 					# Call stabilize to update the finger tables.
@@ -665,13 +665,14 @@ def processUFiles(fileNames):
 		node = chord(fileName)
 		print "CHORD HAS ASSIGNED THE FILE TO NODE: ",
 		print node
-		sendNode = None
-		if node != NODE.ID:
-			for i in xrange(1, IDBITS+1):
-				interval = (FINGERS[i][0], (FINGERS[i][0] + 2**i) % 2**IDBITS)
-				if between(interval[0], interval[1], node):
-					sendNode = FINGERS[i][1]
-					break;
+		#sendNode = None
+		sendNode = find_successor(node)
+		if sendNode.ID != NODE.ID:
+			# for i in xrange(1, IDBITS+1):
+			# 	interval = (FINGERS[i][0], (FINGERS[i][0] + 2**i) % 2**IDBITS)
+			# 	if between(interval[0], interval[1], node):
+			# 		sendNode = FINGERS[i][1]
+			# 		break;
 			# Send the file to node.
 			print "THE FILE WILL BE SENT TO NODE: ",
 			print sendNode
@@ -687,7 +688,7 @@ def processUFiles(fileNames):
 						print r.text
 						print "Node " + str(sendNode.ID) + " did not receive" + fileName + "correctly."
 					else:
-						if (r.text == "SUCCESS"):
+						if r.text == "SUCCESS":
 							succFiles.append(fileName)
 						else:
 							print "The node " + str(node) + "could not be found."
