@@ -61,7 +61,10 @@ SHUTDOWN = False
 THREADS = []
 
 # CORE
-# Find the successor node of an ID on the Chord ring
+
+# returns the node whose ID succeeds input [ID], i.e the node that, 
+# from a clockwise perspective of the Chord ring, is ahead of the 
+# input [ID] by the least distance
 def find_successor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_successor): finding successor of ' + str(ID)
 	# print 'calling [find_predecessor] from [find_successor]'
@@ -81,6 +84,9 @@ def find_successor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_successor): successor of ' + str(ID) + ' is ' + str(succ.ID)
 	return succ
 
+# returns the node whose ID precedes input [ID], i.e the node that, from 
+# a clockwise perspective of the Chord ring, is behind of the 
+# input [ID] by the least distance
 def find_predecessor(ID):
 	global NODE, SUCCESSOR
 	# print '(Node' + str(NODE.ID) + ':find_predecessor): finding predecessor of ' + str(ID)
@@ -120,12 +126,12 @@ def find_predecessor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_predecessor): predecessor of ' + str(ID) + ' is ' + str(node.ID)
 	return node
 
+# returns the finger node whose ID preceds input [ID] (using the 
+# definition of ‘precedes’ from above)
 def find_closest_preceding_finger(ID):
 	# loops from IDBITS to 1
 	for i in xrange(IDBITS, 0, -1):
 		ith_finger = FINGERS[i][1]
-		# e.g x = 4, y = 5 or 4, then there does not exist a z that could
-		# be exclusive between 4 & 5
 		invalid = next_ID(NODE.ID) == ID
 		# print '[find_closest_preceding_finger] Is finger ' + str(i) + ': ' + str(ith_finger.ID) + ' between ' + str(next_ID(NODE.ID)) + ' and ' + str(prev_ID(ID))
 		if not invalid and between(next_ID(NODE.ID), prev_ID(ID), ith_finger.ID):
@@ -133,6 +139,10 @@ def find_closest_preceding_finger(ID):
 	return NODE
 
 # STABILIZATION
+
+# randomly index into the finger table and check if the finger node for 
+# that index is out of date (by calling find_successor), and updates it 
+# if necessary
 def fix_fingers():
 	global FINGERS
 	idx = random.randint(1, IDBITS)
@@ -155,11 +165,17 @@ def run_fix_fingers():
 		print_succ_pred()
 		print '======================================='
 
+# check if a node exists by pinging it
 def node_exists(node):
 	data, result = make_http_request(node.IP, 'ping', 'GET', None)
 	# print '[node_exists/ping] node ' + str(node.ID) + ' exists: ' + str(result)
 	return result
 
+# runs periodically on thread separate from main thread; checks if a new 
+# node has come between our node and its successor, or if our successor 
+# has left, and responds in both situation by correcting our successor
+# (which is also the first finger) and notifying our new successor of 
+# our existence
 def stabilize():
 	global SUCCESSOR, PREDECESSOR
 
@@ -181,7 +197,6 @@ def stabilize():
 		found_new_succ = False
 		# try and find new successor by going through ring in clockwise order
 		# and finding the first ID whose predecessor can be found
-
 		for ID in circular_range(SUCCESSOR.ID):
 			old_succ = SUCCESSOR
 			# print 'calling [find_predecessor] from stabilize'
@@ -193,10 +208,11 @@ def stabilize():
 					print 'New successor is ' + str(new_succ.ID)
 					print '======================================='
 					SUCCESSOR = new_succ
+					# the first finger node is equivalent to our successor
 					FINGERS[1] = (FINGERS[1][0], SUCCESSOR)
 
 				# "fixing the gap" (i.e successor & predecessor of the leaving node fixing their predecessor & successor)
-				# has to be atomic BUT NO NEED TO BE ATOMIC IF SUCCESSOR IS YOURSELF
+				# has to be atomic unless our successor is ourselves
 				if SUCCESSOR.ID != NODE.ID:
 					data, notify_result = make_http_request(SUCCESSOR.IP, 'notify', 'POST', {'id': NODE.ID, 'ip': NODE.IP})
 					if not notify_result:
@@ -204,23 +220,23 @@ def stabilize():
 						print 'Failed to notify ' + str(SUCCESSOR.ID) + '; reverting to old successor & trying again later'
 						print '======================================='
 						SUCCESSOR = old_succ
+						# the first finger node is equivalent to our successor
 						FINGERS[1] = (FINGERS[1][0], SUCCESSOR)
 
 				return
 
 		# could not find node's new successor
 		if not found_new_succ:
-			# for now, raise exception
 			print '==============[stabilize]================='
 			print 'Could not update successor'
 			print '==================================='
 			return
+
 	# check if successor has a new predecessor in between us & the successor
 	else:
 		# node is our successor's predecessor
 		succ_pred = Node(data["ip"], data["id"])
 
-		# ===========================================
 		# If [succ_pred] is NULL, immediately notify [succ]
 		if not null_node(succ_pred):
 			# if our successor's predecessor is between us
@@ -231,13 +247,8 @@ def stabilize():
 					print 'New successor is ' + str(succ_pred.ID)
 					print '==================================='
 					SUCCESSOR = succ_pred
+					# the first finger node is equivalent to our successor
 					FINGERS[1] = (FINGERS[1][0], SUCCESSOR)
-		# ===========================================
-
-		# invalid = next_ID(NODE.ID) == SUCCESSOR.ID
-		# if not invalid and between(next_ID(NODE.ID), prev_ID(SUCCESSOR.ID), succ_pred.ID):
-		# 	print 'New successor is ' + str(succ_pred.ID)
-		# 	SUCCESSOR = succ_pred
 
 		# notify successor of our existence
 		if SUCCESSOR.ID == NODE.ID:
@@ -259,6 +270,9 @@ def run_stabilize():
 		stabilize()
 		# print_finger_table('After stabilize')
 
+# runs periodically on thread separate from main thread; checks if 
+# input [node] is between our node and its predecessor, i.e if we have 
+# a new predecessor, and responds by correcting our predecessor if necessary
 def notify(node):
 	global PREDECESSOR
 
@@ -269,6 +283,8 @@ def notify(node):
 		print '======================================='
 		PREDECESSOR = node
 
+	# make sure predecessor has not left the Chord network to prevent
+	# making inaccurate comparisons below
 	data, result = make_http_request(PREDECESSOR.IP, 'ping','GET', None)
 	# print '[node_exists/ping] node ' + str(node.ID) + ' exists: ' + str(result)
 
@@ -286,6 +302,8 @@ def notify(node):
 		PREDECESSOR = node
 	# print 'PREDECESSOR is ' + str(PREDECESSOR.ID)
 
+# check if the node at IP has joined the Chord network (to prevent 
+# relying on online BUT uninitialized during the [join] process)
 @app.route("/init_status", methods=["GET"])
 def handle_init_status():
 	resp = jsonify({
@@ -294,6 +312,9 @@ def handle_init_status():
 	resp.status_code = 200
 	return resp
 
+# attempts to join the Zoo’s Chord network by generating a unique ID 
+# and performs a TCP SYN scan through nmap to find another node in the 
+# network we ask to initialize our successor and finger table.
 @app.route("/join", methods=["POST", "GET"])
 def join():
 	print '==============[join]================='
@@ -365,17 +386,20 @@ def join():
 	print '====================================='
 	return "Welcome to CHORD"
 
+# initialize all finger nodes to the successor on joining
 def makeFingers():
 	for i in range(1, IDBITS + 1):
 		start = (NODE.ID + math.pow(2, i-1)) % math.pow(2, IDBITS)
 		FINGERS[i] = (start, SUCCESSOR)
 
+# check if a node is still in the Chord network
 @app.route("/ping", methods=["GET"])
 def ping():
 	resp = jsonify({})
 	resp.status_code = 200
 	return resp
 
+# exit loops calling [stabilize] and [fix_fingers]; terminate Flask app
 @app.route("/leave", methods=["POST"])
 def leave():
 	global SHUTDOWN, THREADS
@@ -392,6 +416,9 @@ def leave():
 def allowed_file(filename):
 	return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXTENSIONS
 
+# wrapper function that allows user to search if a file is in the 
+# Chord network by checking if the node Chord maps the file’s ID to 
+# contains the file; initiates download to local folder if file is available
 @app.route("/searchFile", methods=["POST"])
 def search():
 	if "fileName" not in request.form:
@@ -404,13 +431,13 @@ def search():
 	if fileName in NODE.FILES:
 		return "You already have this file and it's in downloads or uploads. LOL"
 	else:
-		print "we don't have the file"
+		# print "we don't have the file"
 		node = chord(fileName)
 		successor = find_successor(node)
 		address = "http://" + successor.IP + ":5000/fileRequest"
 		try:
 			req = requests.post(address, data={'fileName':fileName,'originID':NODE.ID, 'originIP':NODE.IP}, timeout=40)
-			print "THIS IS THE REQUEST RESPONSE " + str(req.text)
+			# print "THIS IS THE REQUEST RESPONSE " + str(req.text)
 			if req.status_code == 200:
 				# print dir(req)
 				# file = req.files[fileName]
@@ -429,7 +456,9 @@ def search():
 			run_stabilize()
 			return "COULD NOT DOWNLOAD THE FILE" # We need to do something if this fails
 
-
+# allows users to upload files to our node and the Chord network; sends 
+# the file to the node Chord maps the file’s ID to and then saves copy 
+# of file to our node for redundancy
 @app.route("/upload", methods=["POST"])
 def upload():
 	uploadFiles = []
@@ -448,7 +477,6 @@ def upload():
 	return render_template("uploaded.html", successFiles=successFiles, failure=failure)
 
 # END OF USER FUNCTIONS
-
 
 # CHORD FUNCTIONS
 
@@ -632,9 +660,6 @@ def sendFile(fileName, originID, originIP):
 			print '================================='
 			return "FAILURE"
 
-# addRandom -> boolean
-# Use addRandom = True whenever you need to generate
-# a new ID if the one generated first was already taken.
 def genID():
 	# return int(sys.argv[1])
 	hostname = socket.gethostname()
@@ -719,8 +744,8 @@ def processUFiles(fileNames):
 			succFiles.append(fileName)
 	return succFiles
 
-
-# STABILIZE TAKES SUPER LONG BECAUSE 10 tries * 5 timeout
+# wrapper function for retrying http requests and failing gracefully
+# on timeout
 def make_http_request(target, endpoint, method, payload):
 	tries = 0
 	while tries < MAX_RETRIES:
@@ -739,6 +764,7 @@ def make_http_request(target, endpoint, method, payload):
 	return (None, False)
 
 # checks if ID c is (inclusive) between a & b in the Chord ring
+# using module arithmetic
 def between(a, b, c):
 	a, b, c = int(a), int(b), int(c)
 	if b > a:
@@ -762,6 +788,7 @@ def next_ID(ID):
 def prev_ID(ID):
 	return ID - 1 if ID != 0 else math.pow(2, IDBITS) - 1
 
+# generates a sequence of nodes to traverse in clockwise order
 def circular_range(start):
 	l = []
 	ring_size = int(math.pow(2, IDBITS))
