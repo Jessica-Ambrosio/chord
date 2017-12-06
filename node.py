@@ -322,7 +322,7 @@ def join():
 
 	print '[join] ' + str(len(NEIGHBORS)) + ' are online'
 	if len(NEIGHBORS) == 0:
-		NODE.ID = genID(False)
+		NODE.ID = genID()
 		SUCCESSOR = NODE
 		makeFingers() # Make the finger table! :D
 		INITIALIZED = True
@@ -330,7 +330,7 @@ def join():
 
 	idTaken = True
 	tries = 0
-	NODE.ID = genID(False)
+	NODE.ID = genID()
 
 	while idTaken and tries < 10:
 		for neighbor in NEIGHBORS:
@@ -344,7 +344,7 @@ def join():
 
 		if idTaken:
 			# try a new ID
-			NODE.ID = genID(True)
+			NODE.ID = genID()
 			tries += 1
 
 	# if we pick [IDBITS] such that math.pow(2, [IDBITS]) > #(Zoo machines), then if [idTaken]
@@ -629,20 +629,18 @@ def sendFile(fileName, originID, originIP):
 # addRandom -> boolean
 # Use addRandom = True whenever you need to generate
 # a new ID if the one generated first was already taken.
-def genID(addRandom):
+def genID():
 	# return int(sys.argv[1])
-
-    hostname = socket.gethostname()
-    IP = socket.gethostbyname(hostname)
-    hashIP = hashlib.sha1(IP)
-    hexString = str(int(hashIP.hexdigest(), 16))
-    decimal = 0
-    for index,char in enumerate(hexString):
-        decimal += int (char) * 16 ** index
-    if (addRandom):
-        decimal += random.randint(1, (2**IDBITS))
-    ID = decimal % (2 ** 3)
-    return ID
+	hostname = socket.gethostname()
+	IP = socket.gethostbyname(hostname)
+	hashIP = hashlib.sha1(IP)
+	hexString = str(int(hashIP.hexdigest(), 16))
+	decimal = 0
+	for index,char in enumerate(hexString):
+		decimal += int (char) * 16 ** index
+	decimal += random.randint(1, (2**IDBITS))
+	ID = decimal % (2 ** 3)
+	return ID
 
 # This function maps a file to a node.
 def chord(filename):
