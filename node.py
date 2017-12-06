@@ -62,8 +62,8 @@ THREADS = []
 
 # CORE
 
-# returns the node whose ID succeeds input [ID], i.e the node that, 
-# from a clockwise perspective of the Chord ring, is ahead of the 
+# returns the node whose ID succeeds input [ID], i.e the node that,
+# from a clockwise perspective of the Chord ring, is ahead of the
 # input [ID] by the least distance
 def find_successor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_successor): finding successor of ' + str(ID)
@@ -84,8 +84,8 @@ def find_successor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_successor): successor of ' + str(ID) + ' is ' + str(succ.ID)
 	return succ
 
-# returns the node whose ID precedes input [ID], i.e the node that, from 
-# a clockwise perspective of the Chord ring, is behind of the 
+# returns the node whose ID precedes input [ID], i.e the node that, from
+# a clockwise perspective of the Chord ring, is behind of the
 # input [ID] by the least distance
 def find_predecessor(ID):
 	global NODE, SUCCESSOR
@@ -126,8 +126,8 @@ def find_predecessor(ID):
 	# print '(Node' + str(NODE.ID) + ':find_predecessor): predecessor of ' + str(ID) + ' is ' + str(node.ID)
 	return node
 
-# returns the finger node whose ID preceds input [ID] (using the 
-# definition of ‘precedes’ from above)
+# returns the finger node whose ID preceds input [ID] (using the
+# definition of precedes from above)
 def find_closest_preceding_finger(ID):
 	# loops from IDBITS to 1
 	for i in xrange(IDBITS, 0, -1):
@@ -140,8 +140,8 @@ def find_closest_preceding_finger(ID):
 
 # STABILIZATION
 
-# randomly index into the finger table and check if the finger node for 
-# that index is out of date (by calling find_successor), and updates it 
+# randomly index into the finger table and check if the finger node for
+# that index is out of date (by calling find_successor), and updates it
 # if necessary
 def fix_fingers():
 	global FINGERS
@@ -171,10 +171,10 @@ def node_exists(node):
 	# print '[node_exists/ping] node ' + str(node.ID) + ' exists: ' + str(result)
 	return result
 
-# runs periodically on thread separate from main thread; checks if a new 
-# node has come between our node and its successor, or if our successor 
+# runs periodically on thread separate from main thread; checks if a new
+# node has come between our node and its successor, or if our successor
 # has left, and responds in both situation by correcting our successor
-# (which is also the first finger) and notifying our new successor of 
+# (which is also the first finger) and notifying our new successor of
 # our existence
 def stabilize():
 	global SUCCESSOR, PREDECESSOR
@@ -270,8 +270,8 @@ def run_stabilize():
 		stabilize()
 		# print_finger_table('After stabilize')
 
-# runs periodically on thread separate from main thread; checks if 
-# input [node] is between our node and its predecessor, i.e if we have 
+# runs periodically on thread separate from main thread; checks if
+# input [node] is between our node and its predecessor, i.e if we have
 # a new predecessor, and responds by correcting our predecessor if necessary
 def notify(node):
 	global PREDECESSOR
@@ -302,7 +302,7 @@ def notify(node):
 		PREDECESSOR = node
 	# print 'PREDECESSOR is ' + str(PREDECESSOR.ID)
 
-# check if the node at IP has joined the Chord network (to prevent 
+# check if the node at IP has joined the Chord network (to prevent
 # relying on online BUT uninitialized during the [join] process)
 @app.route("/init_status", methods=["GET"])
 def handle_init_status():
@@ -312,8 +312,8 @@ def handle_init_status():
 	resp.status_code = 200
 	return resp
 
-# attempts to join the Zoo’s Chord network by generating a unique ID 
-# and performs a TCP SYN scan through nmap to find another node in the 
+# attempts to join the Zoo's Chord network by generating a unique ID
+# and performs a TCP SYN scan through nmap to find another node in the
 # network we ask to initialize our successor and finger table.
 @app.route("/join", methods=["POST", "GET"])
 def join():
@@ -416,8 +416,8 @@ def leave():
 def allowed_file(filename):
 	return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXTENSIONS
 
-# wrapper function that allows user to search if a file is in the 
-# Chord network by checking if the node Chord maps the file’s ID to 
+# wrapper function that allows user to search if a file is in the
+# Chord network by checking if the node Chord maps the file's ID to
 # contains the file; initiates download to local folder if file is available
 @app.route("/searchFile", methods=["POST"])
 def search():
@@ -456,8 +456,8 @@ def search():
 			run_stabilize()
 			return "COULD NOT DOWNLOAD THE FILE" # We need to do something if this fails
 
-# allows users to upload files to our node and the Chord network; sends 
-# the file to the node Chord maps the file’s ID to and then saves copy 
+# allows users to upload files to our node and the Chord network; sends
+# the file to the node Chord maps the file's ID to and then saves copy
 # of file to our node for redundancy
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -710,7 +710,7 @@ def processUFiles(fileNames):
 			# Send the file to node.
 			print '===============[processUFiles]==============='
 			print "The file will be sent to Node ",
-			print sendNode
+			print sendNode.ID
 			print '============================================='
 			address = "http://" + sendNode.IP + ":5000/receiveFile"
 			# Send the file to node.
